@@ -164,16 +164,19 @@ BOOST_AUTO_TEST_CASE(CuboidVolumeBuilderTest) {
     BOOST_CHECK_EQUAL(lay->layerType(), LayerType::active);
   }
 
+
+  std::cout<<"BUILDING TRACKING GEOMETRY CONFIGURATION"<<std::endl;
   ////////////////////////////////////////////////////////////////////
   // Build TrackingGeometry configuration
 
   // Build second volume
   std::vector<CuboidVolumeBuilder::SurfaceConfig> surfaceConfig2;
+  double positions[6] = {100,103,200,203,300,303};
   for (int i = 1; i < 5; i++) {
     // Position of the surfaces
     CuboidVolumeBuilder::SurfaceConfig cfg;
-    cfg.position = {-i * UnitConstants::m, 0., 0.};
-
+    cfg.position = {-positions[i-1] * UnitConstants::mm, 0., 0.};
+    
     // Rotation of the surfaces
     double rotationAngle = M_PI * 0.5;
     Vector3D xPos(cos(rotationAngle), 0., sin(rotationAngle));
@@ -193,7 +196,14 @@ BOOST_AUTO_TEST_CASE(CuboidVolumeBuilderTest) {
         new HomogeneousSurfaceMaterial(matProp));
 
     // Thickness of the detector element
-    cfg.thickness = 1_um;
+    cfg.thickness = 320_um;
+    
+    cfg.detElementConstructor =
+        [](std::shared_ptr<const Transform3D> trans,
+           std::shared_ptr<const RectangleBounds> bounds, double thickness) {
+        return new DetectorElementStub(trans, bounds, thickness);
+    };
+    
     surfaceConfig2.push_back(cfg);
   }
 

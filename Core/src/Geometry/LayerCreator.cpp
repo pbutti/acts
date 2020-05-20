@@ -326,23 +326,27 @@ Acts::MutableLayerPtr Acts::LayerCreator::planeLayer(
 
   // remaining layer parameters
   double layerHalf1, layerHalf2, layerThickness;
+  std::string thicknessAxis = "X";
   switch (bValue) {
     case BinningValue::binX: {
       layerHalf1 = 0.5 * (protoLayer.maxY - protoLayer.minY);
       layerHalf2 = 0.5 * (protoLayer.maxZ - protoLayer.minZ);
       layerThickness = (protoLayer.maxX - protoLayer.minX);
+      thicknessAxis = "X";
       break;
     }
     case BinningValue::binY: {
       layerHalf1 = 0.5 * (protoLayer.maxX - protoLayer.minX);
       layerHalf2 = 0.5 * (protoLayer.maxZ - protoLayer.minZ);
       layerThickness = (protoLayer.maxY - protoLayer.minY);
+      thicknessAxis = "Y";
       break;
     }
     default: {
       layerHalf1 = 0.5 * (protoLayer.maxX - protoLayer.minX);
       layerHalf2 = 0.5 * (protoLayer.maxY - protoLayer.minY);
       layerThickness = (protoLayer.maxZ - protoLayer.minZ);
+      thicknessAxis = "Z";
     }
   }
 
@@ -354,10 +358,23 @@ Acts::MutableLayerPtr Acts::LayerCreator::planeLayer(
   ACTS_VERBOSE(" - with layer center     = "
                << "(" << centerX << ", " << centerY << ", " << centerZ << ")");
   ACTS_VERBOSE(" - from X min/max   = " << protoLayer.minX << " / "
-                                        << protoLayer.maxX);
+               << protoLayer.maxX);
   ACTS_VERBOSE(" - from Y min/max   = " << protoLayer.minY << " / "
-                                        << protoLayer.maxY);
-  ACTS_VERBOSE(" - with Z thickness = " << layerThickness);
+               << protoLayer.maxY);
+  ACTS_VERBOSE(" - with "<< thicknessAxis<<" thickness = " << layerThickness);
+  
+  //PF::
+  std::cout<<"Creating a plane layer:"<<std::endl;
+  std::cout<<" - with layer center     = "<<std::endl;
+  std::cout<< "(" << centerX << ", " << centerY << ", " << centerZ << ")"<<std::endl;
+  std::cout<<" - from X min/max   = " << protoLayer.minX << " / "
+           << protoLayer.maxX<<std::endl;
+  std::cout<<" - from Y min/max   = " << protoLayer.minY << " / "
+           << protoLayer.maxY<<std::endl;
+  std::cout<<" - from Z min/max   = " << protoLayer.minZ << " / "
+           << protoLayer.maxZ<<std::endl;
+  std::cout<<" - with "<<thicknessAxis<<" thickness = " << layerThickness<<std::endl;
+  
 
   // create the layer transforms if not given
   // we need to transform in case centerX/centerY/centerZ != 0, so that the
@@ -373,7 +390,7 @@ Acts::MutableLayerPtr Acts::LayerCreator::planeLayer(
 
   std::unique_ptr<SurfaceArray> sArray;
   if (!surfaces.empty()) {
-    sArray = m_cfg.surfaceArrayCreator->surfaceArrayOnPlane(
+      sArray = m_cfg.surfaceArrayCreator->surfaceArrayOnPlane(
         gctx, std::move(surfaces), bins1, bins2, bValue, protoLayer, transform);
 
     checkBinning(gctx, *sArray);

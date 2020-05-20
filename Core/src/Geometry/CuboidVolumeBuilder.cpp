@@ -37,12 +37,12 @@ Acts::CuboidVolumeBuilder::buildSurface(
 
   // Create and store surface
   if (cfg.detElementConstructor) {
-    surface = Surface::makeShared<PlaneSurface>(
+      surface = Surface::makeShared<PlaneSurface>(
         cfg.rBounds,
         *(cfg.detElementConstructor(std::make_shared<const Transform3D>(trafo),
                                     cfg.rBounds, cfg.thickness)));
   } else {
-    surface = Surface::makeShared<PlaneSurface>(
+      surface = Surface::makeShared<PlaneSurface>(
         std::make_shared<const Transform3D>(trafo), cfg.rBounds);
   }
   surface->assignSurfaceMaterial(cfg.surMat);
@@ -54,19 +54,30 @@ std::shared_ptr<const Acts::Layer> Acts::CuboidVolumeBuilder::buildLayer(
     Acts::CuboidVolumeBuilder::LayerConfig& cfg) const {
   // Build the surface
   if (cfg.surface == nullptr) {
-    cfg.surface = buildSurface(gctx, cfg.surfaceCfg);
+      cfg.surface = buildSurface(gctx, cfg.surfaceCfg);
   }
   // Build transformation centered at the surface position
   Transform3D trafo(Transform3D::Identity() * cfg.surfaceCfg.rotation);
   trafo.translation() = cfg.surfaceCfg.position;
+  std::cout<<"PF::Transformation of the layer!"<<std::endl;
+  std::cout<<trafo.rotation()<<std::endl;
+  std::cout<<"PF::trafo translation"<<std::endl;
+  std::cout<<trafo.translation().transpose()<<std::endl;
 
   LayerCreator::Config lCfg;
   lCfg.surfaceArrayCreator = std::make_shared<const SurfaceArrayCreator>();
   LayerCreator layerCreator(lCfg);
-
+  
+  //PF::Change!?!?
   return layerCreator.planeLayer(gctx, {cfg.surface}, cfg.binsY, cfg.binsZ,
                                  BinningValue::binX, boost::none,
                                  std::make_shared<const Transform3D>(trafo));
+  
+  //Why binsY and binsZ ??!!
+  //return layerCreator.planeLayer(gctx, {cfg.surface}, cfg.binsY, cfg.binsZ,
+  //                             BinningValue::binZ, boost::none,
+  //                             std::make_shared<const Transform3D>(trafo));
+
 }
 
 std::pair<double, double> Acts::CuboidVolumeBuilder::binningRange(
@@ -77,13 +88,14 @@ std::pair<double, double> Acts::CuboidVolumeBuilder::binningRange(
   std::pair<double, double> minMax = std::make_pair(
       std::numeric_limits<double>::max(), -std::numeric_limits<double>::max());
   for (const auto& layercfg : cfg.layerCfg) {
-    // Test if new extreme is found and set it
-    if (layercfg.surfaceCfg.position.x() - 1_um < minMax.first) {
-      minMax.first = layercfg.surfaceCfg.position.x() - 1_um;
-    }
-    if (layercfg.surfaceCfg.position.x() + 1_um > minMax.second) {
-      minMax.second = layercfg.surfaceCfg.position.x() + 1_um;
-    }
+      //PF::add the layer half thickness to fix for the navigation error
+      // Test if new extreme is found and set it
+      if (layercfg.surfaceCfg.position.x() - 1_um < minMax.first) {
+          minMax.first = layercfg.surfaceCfg.position.x() - 0.5*layercfg.surfaceCfg.thickness - 1_um;
+      }
+      if (layercfg.surfaceCfg.position.x() + 1_um > minMax.second) {
+          minMax.second = layercfg.surfaceCfg.position.x() + 0.5*layercfg.surfaceCfg.thickness + 1_um;
+      }
   }
   return minMax;
 }
@@ -99,7 +111,7 @@ std::shared_ptr<Acts::TrackingVolume> Acts::CuboidVolumeBuilder::buildVolume(
       cfg.length.x() * 0.5, cfg.length.y() * 0.5, cfg.length.z() * 0.5);
 
   if (cfg.layerCfg.empty()) {
-    // Build dummy layer if no layer is given (tmp solution)
+      // Build dummy layer if no layer is given (tmp solution)
     SurfaceConfig sCfg;
     sCfg.position = cfg.position;
     // Rotation of the surfaces: +pi/2 around axis y
@@ -125,7 +137,7 @@ std::shared_ptr<Acts::TrackingVolume> Acts::CuboidVolumeBuilder::buildVolume(
     cfg.layers.reserve(cfg.layerCfg.size());
 
     for (auto& layerCfg : cfg.layerCfg) {
-      cfg.layers.push_back(buildLayer(gctx, layerCfg));
+        cfg.layers.push_back(buildLayer(gctx, layerCfg));
       layVec.push_back(cfg.layers.back());
     }
   } else {
@@ -138,7 +150,7 @@ std::shared_ptr<Acts::TrackingVolume> Acts::CuboidVolumeBuilder::buildVolume(
   std::pair<double, double> minMax = binningRange(gctx, cfg);
   LayerArrayCreator::Config lacCnf;
   LayerArrayCreator layArrCreator(
-      lacCnf, getDefaultLogger("LayerArrayCreator", Logging::INFO));
+      lacCnf, getDefaultLogger("LayerArrayCreator", Logging::VERBOSE));
   std::unique_ptr<const LayerArray> layArr(
       layArrCreator.layerArray(gctx, layVec, minMax.first, minMax.second,
                                BinningType::arbitrary, BinningValue::binX));

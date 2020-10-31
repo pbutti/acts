@@ -12,6 +12,8 @@
 #include <numeric>
 #include <type_traits>
 
+#include <iostream>
+
 namespace Acts {
 
 template <typename external_spacepoint_t, typename platform_t>
@@ -43,6 +45,8 @@ Seedfinder<external_spacepoint_t, platform_t>::createSeedsForGroup(
   for (auto spM : middleSPs) {
     float rM = spM->radius();
     float zM = spM->z();
+    float xM = spM->x();
+    float yM = spM->y();
     float varianceRM = spM->varianceR();
     float varianceZM = spM->varianceZ();
 
@@ -195,7 +199,30 @@ Seedfinder<external_spacepoint_t, platform_t>::createSeedsForGroup(
         float A = (lt.V - Vb) / dU;
         float S2 = 1. + A * A;
         float B = Vb - A * Ub;
+
         float B2 = B * B;
+
+        float b_c = 1. / (2.*B);
+        float a_c = -1. * b_c*A;
+        
+        
+        float a_cp = a_c*(xM/rM) - b_c*(yM/rM) + xM;
+        float b_cp = b_c*(xM/rM) + a_c*(yM/rM) + yM;
+        
+
+        float R  = 1./((B/sqrt(S2))*2);
+
+        std::cout<<"Seedfinder.ipp  A="<<A<<std::endl;
+        std::cout<<"Seedfinder.ipp  B="<<B<<std::endl;
+        std::cout<<"Seedfinder.ipp  a="<<a_c<<std::endl;
+        std::cout<<"Seedfinder.ipp  b="<<b_c<<std::endl;
+        float check = (a_c*a_c+b_c*b_c - R*R);
+        std::cout<<"Seedfinder.ipp a2+b2-R2="<<check<<std::endl;
+        std::cout<<"Seedfinder.ipp xM/rM="<<xM/rM<<std::endl;
+        std::cout<<"Seedfinder.ipp yM/rM="<<yM/rM<<std::endl;
+        std::cout<<"Seedfinder.ipp  (a_cp,b_cp)="<<a_cp<<","<<b_cp<<std::endl;
+        std::cout<<"Seedfinder.ipp R = "<< 1./((B/sqrt(S2))*2)<<std::endl;
+                        
         // sqrt(S2)/B = 2 * helixradius
         // calculated radius must not be smaller than minimum radius
         if (S2 < B2 * m_config.minHelixDiameter2) {
@@ -207,6 +234,7 @@ Seedfinder<external_spacepoint_t, platform_t>::createSeedsForGroup(
         float pT2scatter = 4 * iHelixDiameter2 * m_config.pT2perRadius;
         // TODO: include upper pT limit for scatter calc
         // convert p(T) to p scaling by sin^2(theta) AND scale by 1/sin^4(theta)
+
         // from rad to deltaCotTheta
         float p2scatter = pT2scatter * iSinTheta2;
         // if deltaTheta larger than allowed scattering for calculated pT, skip
@@ -218,7 +246,21 @@ Seedfinder<external_spacepoint_t, platform_t>::createSeedsForGroup(
         // A and B allow calculation of impact params in U/V plane with linear
         // function
         // (in contrast to having to solve a quadratic function in x/y plane)
-        float Im = std::abs((A - B * rM) * rM);
+        float Im  = std::abs((A - B * rM) * rM);
+        float Im2 = (A - B * rM) * rM;
+        float ip  = (1/(2*R)) * (a_cp*a_cp + b_cp*b_cp - R*R); 
+                        
+        float phi0 = atan2(b_cp,a_cp);
+        
+        std::cout<<"Seedfinder.ipp Im="<<Im2<<std::endl;
+        std::cout<<"Seedfinder.ipp Curvature="<<(B/sqrt(S2))*2<<std::endl;
+        std::cout<<"Seedfinder.ipp Phi0 = "<<phi0<<std::endl;
+        std::cout<<"Seedfinder.ipp pi/2 - Phi0 = "<<M_PI/2. + phi0<<std::endl;
+        std::cout<<"Seedfinder.ipp cot_theta="<<lt.cotTheta<<std::endl;
+        double q_over_pT = (-(B/sqrt(S2))*2 ) / (300. * m_config.bFieldInZ);
+        std::cout<<"Seedfinder.ipp pT="<< 1./ q_over_pT<<std::endl;
+        std::cout<<"Seedfinder.ipp ip="<<ip<<std::endl;
+        
 
         if (Im <= m_config.impactMax) {
           topSpVec.push_back(compatTopSP[t]);
@@ -254,10 +296,16 @@ void Seedfinder<external_spacepoint_t, platform_t>::transformCoordinates(
   float yM = spM.y();
   float zM = spM.z();
   float rM = spM.radius();
+
   float varianceZM = spM.varianceZ();
   float varianceRM = spM.varianceR();
   float cosPhiM = xM / rM;
   float sinPhiM = yM / rM;
+
+  std::cout<<"rM=="<<rM<<std::endl;
+  std::cout<<"cosPhiM=="<<cosPhiM<<std::endl;
+  std::cout<<"sinPhiM=="<<sinPhiM<<std::endl;
+  
   for (auto sp : vec) {
     float deltaX = sp->x() - xM;
     float deltaY = sp->y() - yM;
@@ -271,10 +319,17 @@ void Seedfinder<external_spacepoint_t, platform_t>::transformCoordinates(
     // 1/(length of M -> SP)
     float iDeltaR2 = 1. / (deltaX * deltaX + deltaY * deltaY);
     float iDeltaR = std::sqrt(iDeltaR2);
+
+
     //
     int bottomFactor = 1 * (int(!bottom)) - 1 * (int(bottom));
     // cot_theta = (deltaZ/deltaR)
     float cot_theta = deltaZ * iDeltaR * bottomFactor;
+    
+    std::cout<<"iDeltaR="<<iDeltaR<<std::endl;
+    std::cout<<"cotTheta="<<cot_theta<<std::endl;
+    std::cout<<"theta="<<atan(1/cot_theta)<<std::endl;
+
     // VERY frequent (SP^3) access
     LinCircle l;
     l.cotTheta = cot_theta;

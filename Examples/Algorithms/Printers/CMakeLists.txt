@@ -1,7 +1,8 @@
 add_library(
   ActsExamplesPrinters SHARED
   ActsExamples/Printers/PrintHits.cpp
-  ActsExamples/Printers/PrintParticles.cpp)
+  ActsExamples/Printers/PrintParticles.cpp
+  ActsExamples/Printers/PrintLdmxSpacePoints.cpp)
 target_include_directories(
   ActsExamplesPrinters
   PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)

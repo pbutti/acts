@@ -77,12 +77,15 @@ std::pair<double, double> Acts::CuboidVolumeBuilder::binningRange(
   std::pair<double, double> minMax = std::make_pair(
       std::numeric_limits<double>::max(), -std::numeric_limits<double>::max());
   for (const auto& layercfg : cfg.layerCfg) {
+
+      //Check the thickness 
+      double eps = layercfg.surfaceCfg.thickness / 2.;
     // Test if new extreme is found and set it
-    if (layercfg.surfaceCfg.position.x() - 1_um < minMax.first) {
-      minMax.first = layercfg.surfaceCfg.position.x() - 1_um;
+    if (layercfg.surfaceCfg.position.x() - eps - 1_um < minMax.first) {
+      minMax.first = layercfg.surfaceCfg.position.x() - eps - 1_um;
     }
-    if (layercfg.surfaceCfg.position.x() + 1_um > minMax.second) {
-      minMax.second = layercfg.surfaceCfg.position.x() + 1_um;
+    if (layercfg.surfaceCfg.position.x() + eps + 1_um > minMax.second) {
+      minMax.second = layercfg.surfaceCfg.position.x() + eps + 1_um;
     }
   }
   return minMax;

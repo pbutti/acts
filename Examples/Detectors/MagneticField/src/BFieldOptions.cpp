@@ -217,6 +217,8 @@ BFieldVariant readBField(const boost::program_options::variables_map& vm) {
           "hand over the coordinates in cartesian coordinates: "
           "{Bx,By,Bz} in Tesla.");
     }
+
+    std::cout<<"Constant/Scalable BField: "<<bFieldValues.at(0) << " " << bFieldValues.at(1) << " " <<bFieldValues.at(2)<<std::endl;
     if (vm["bf-context-scalable"].template as<bool>()) {
       // Create the scalable magnetic field
       return std::make_shared<ActsExamples::BField::ScalableBField>(

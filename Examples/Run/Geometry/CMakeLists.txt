@@ -48,6 +48,15 @@ target_link_libraries(
   ActsExampleGeometryTGeo
   PRIVATE ${_common_libraries} ActsExamplesDetectorTGeo)
 
+# Simple Telescope detector
+# TGeo detector
+add_executable(
+  ActsExampleTelescope
+  Telescope.cpp)
+target_link_libraries(
+  ActsExampleTelescope
+  PRIVATE ${_common_libraries} ActsExamplesPrinters ActsExamplesTelescopeSeeding)
+
 install(
   TARGETS
     ActsExampleGeometryEmpty
@@ -55,6 +64,7 @@ install(
     ActsExampleGeometryAligned
     ActsExampleGeometryPayload
     ActsExampleGeometryTGeo
+    ActsExampleTelescope
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 add_subdirectory_if(DD4hep ACTS_BUILD_EXAMPLES_DD4HEP)

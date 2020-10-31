@@ -26,25 +26,25 @@ option(ACTS_BUILD_EVERYTHING "Build with most options enabled (except HepMC3 and
 set(ACTS_PARAMETER_DEFINITIONS_HEADER "" CACHE FILEPATH "Use a different (track) parameter definitions header")
 # plugins related options
 option(ACTS_BUILD_PLUGIN_CUDA "Build CUDA plugin" OFF)
-option(ACTS_BUILD_PLUGIN_DD4HEP "Build DD4hep plugin" OFF)
+option(ACTS_BUILD_PLUGIN_DD4HEP "Build DD4hep plugin" ON)
 option(ACTS_BUILD_PLUGIN_DIGITIZATION "Build Digitization plugin" OFF)
 option(ACTS_BUILD_PLUGIN_IDENTIFICATION "Build Identification plugin" OFF)
 option(ACTS_BUILD_PLUGIN_JSON "Build json plugin" OFF)
 option(ACTS_USE_SYSTEM_NLOHMANN_JSON "Use nlohmann::json provided by the system instead of the bundled version" OFF)
 option(ACTS_BUILD_PLUGIN_LEGACY "Build legacy plugin" OFF)
-option(ACTS_BUILD_PLUGIN_TGEO "Build TGeo plugin" OFF)
+option(ACTS_BUILD_PLUGIN_TGEO "Build TGeo plugin" ON)
 # fatras related options
 option(ACTS_BUILD_FATRAS "Build FAst TRAcking Simulation package" OFF)
 # examples related options
-option(ACTS_BUILD_EXAMPLES "Build standalone examples" OFF)
-option(ACTS_BUILD_EXAMPLES_DD4HEP "Build DD4hep-based code in the examples" OFF)
+option(ACTS_BUILD_EXAMPLES "Build standalone examples" ON)
+option(ACTS_BUILD_EXAMPLES_DD4HEP "Build DD4hep-based code in the examples" ON)
 option(ACTS_BUILD_EXAMPLES_GEANT4 "Build Geant4-based code in the examples" OFF)
 option(ACTS_BUILD_EXAMPLES_HEPMC3 "Build HepMC3-based code in the examples" OFF)
 option(ACTS_BUILD_EXAMPLES_PYTHIA8 "Build Pythia8-based code in the examples" OFF)
 # test related options
 option(ACTS_BUILD_BENCHMARKS "Build benchmarks" OFF)
 option(ACTS_BUILD_INTEGRATIONTESTS "Build integration tests" OFF)
-option(ACTS_BUILD_UNITTESTS "Build unit tests" OFF)
+option(ACTS_BUILD_UNITTESTS "Build unit tests" ON)
 # other options
 option(ACTS_BUILD_DOCS "Build documentation" OFF)
 

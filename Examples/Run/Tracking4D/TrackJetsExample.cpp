@@ -1,3 +1,17 @@
+/*    addPythia8(
+        s,
+        hardProcess=["Top:qqbar2ttbar=on"],
+        npileup=200,
+        vtxGen=acts.examples.GaussianVertexGenerator(
+            stddev=acts.Vector4(0.0125 * u.mm, 0.0125 * u.mm, 55.5 * u.mm, 5.0 * u.ns),
+            mean=acts.Vector4(0, 0, 0, 0),
+        ),
+        rnd=rnd,
+        outputDirRoot=outputDir,
+    )
+*/
+
+
 
 #include "Acts/Definitions/Units.hpp"
 #include "ActsExamples/Options/CommonOptions.hpp"
@@ -20,8 +34,7 @@ using namespace ActsExamples;
 
 
 int main(int argc, char* argv[]) {
-
-
+  
   auto desc = Options::makeDefaultOptions();
   Options::addSequencerOptions(desc);
   Options::addRandomNumbersOptions(desc);
@@ -76,6 +89,7 @@ int main(int argc, char* argv[]) {
   // Pass the smeared particles to the track jets algorithm
   TrackJetsAlgorithm::Config trackJetsConfig;
   trackJetsConfig.inputTrackCollection = particleSmearingCfg.outputTrackParameters;
+  trackJetsConfig.simParticles         = selectParticles.outputParticles;
   trackJetsConfig.radius = 0.4;
   trackJetsConfig.outputTrackJets = "TrackJetsAntikt04";
 

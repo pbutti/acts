@@ -177,6 +177,7 @@ set(_acts_root_version 6.20)
 set(_acts_tbb_version 2020.1)
 
 set(FASTJET_DIR /sw/fastjet-3.4.0)
+set(MCUTILS     /sw/mcutils)
 
 # required packages
 if (ACTS_SETUP_BOOST)

@@ -49,6 +49,10 @@ class ParticleSelector final : public BareAlgorithm {
     bool removeCharged = false;
     /// Remove neutral particles.
     bool removeNeutral = false;
+    /// Remove non final particles.
+    bool removeNonFinal = true;
+    /// Remove non visible particles.
+    bool removeNonVisible = true;
   };
 
   ParticleSelector(const Config& config, Acts::Logging::Level level);

@@ -25,7 +25,10 @@
 #include "ActsExamples/TruthTracking/ParticleSelector.hpp"
 #include "ActsExamples/TruthTracking/ParticleSmearing.hpp"
 #include "ActsExamples/TrackJets/TrackJetsAlgorithm.hpp"
+#include "ActsExamples/Printers/ParticlesPrinter.hpp"
 
+//Generator
+#include "ActsExamples/Generators/Pythia8ProcessGenerator.hpp"
 
 #include <memory>
 
@@ -65,6 +68,10 @@ int main(int argc, char* argv[]) {
   sequencer.addReader(std::make_shared<EventGenerator>(evgen,logLevel));
 
   
+  //ParticlesPrinter::Config print;
+  //print.inputParticles = evgen.outputParticles;
+  //sequencer.addAlgorithm(std::make_shared<ParticlesPrinter>(print, logLevel));
+  
   
   // pre-select particles
   ParticleSelector::Config selectParticles =
@@ -81,6 +88,8 @@ int main(int argc, char* argv[]) {
 
 
   // Run the particle smearing
+  // Here smear only selected, visible particles.
+  
   auto particleSmearingCfg = setupParticleSmearing(
       vars, sequencer, rnd, selectParticles.outputParticles);
 
@@ -89,16 +98,15 @@ int main(int argc, char* argv[]) {
   // Pass the smeared particles to the track jets algorithm
   TrackJetsAlgorithm::Config trackJetsConfig;
   trackJetsConfig.inputTrackCollection = particleSmearingCfg.outputTrackParameters;
-  trackJetsConfig.simParticles         = selectParticles.outputParticles;
+  //trackJetsConfig.simParticles         = selectParticles.outputParticles;
+  trackJetsConfig.simParticles           = evgen.outputParticles;
   trackJetsConfig.radius = 0.4;
   trackJetsConfig.outputTrackJets = "TrackJetsAntikt04";
 
   sequencer.addAlgorithm(std::make_shared<TrackJetsAlgorithm>(
       trackJetsConfig,logLevel));
 
-  
-      
-      
+        
   return sequencer.run();
                           
   

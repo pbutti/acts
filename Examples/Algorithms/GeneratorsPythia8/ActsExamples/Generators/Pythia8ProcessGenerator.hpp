@@ -35,6 +35,9 @@ class Pythia8Generator : public EventGenerator::ParticlesGenerator {
     double cmsEnergy = 14 * Acts::UnitConstants::TeV;
     /// Additional Pythia8 settings.
     std::vector<std::string> settings = {{"HardQCD:all = on"}};
+
+    /// Keep Intermediate particles
+    bool keepIntermediate = true;
   };
 
   Pythia8Generator(const Config& cfg, Acts::Logging::Level lvl);

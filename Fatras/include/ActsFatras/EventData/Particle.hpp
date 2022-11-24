@@ -198,6 +198,20 @@ class Particle {
   /// Accumulated path within material measured in interaction lengths.
   constexpr Scalar pathInL0() const { return m_pathInL0; }
 
+  /// Set particle as final
+  constexpr Particle &setIsFinal(bool isfinal) {
+    m_isFinal = isfinal;
+    return *this;
+  }
+  constexpr bool isFinal() const {return m_isFinal; }
+
+  /// Set partcile as visible
+  constexpr Particle &setIsVisible(bool isvisible) {
+    m_isVisible = isvisible;
+    return *this;
+  }
+  constexpr bool isVisible() const {return m_isVisible; }
+
  private:
   // identity, i.e. things that do not change over the particle lifetime.
   /// Particle identifier within the event.
@@ -206,6 +220,10 @@ class Particle {
   ProcessType m_process = ProcessType::eUndefined;
   /// PDG particle number.
   Acts::PdgParticle m_pdg = Acts::PdgParticle::eInvalid;
+  /// Particle tagged as final from pythia
+  bool m_isFinal = true;
+  /// Particle tagged as visible from pythia
+  bool m_isVisible = true;
   // Particle charge and mass.
   Scalar m_charge = Scalar(0);
   Scalar m_mass = Scalar(0);

@@ -3,6 +3,7 @@ set(_common_libraries
   ActsExamplesFramework
   ActsExamplesCommon
   ActsExamplesGenerators
+  ActsExamplesPrinters
   ActsExamplesGeneratorsPythia8
   ActsExamplesGeneratorsPythia8Options
   ActsExamplesTrackJets

@@ -18,8 +18,7 @@ ActsExamples::TrackJetsAlgorithm::TrackJetsAlgorithm(
   if (m_cfg.outputTrackJets.empty()) {
     throw std::invalid_argument("Missing output track jets collection");
   }
-
-
+  
   m_jet_def = std::make_shared<fastjet::JetDefinition>(fastjet::antikt_algorithm, m_cfg.radius);
   
 }
@@ -30,62 +29,94 @@ ActsExamples::ProcessCode ActsExamples::TrackJetsAlgorithm::execute(
   //Read input data
   const auto& tracks =
       ctx.eventStore.get<TrackParametersContainer>(m_cfg.inputTrackCollection);
-
+  
+  ACTS_DEBUG("Number of tracks " << tracks.size());
+    
   //Empty set if simParticles is not set in configuration
   const auto& simulatedParticles =
       (!m_cfg.simParticles.empty()) ? ctx.eventStore.get<SimParticleContainer>(m_cfg.simParticles) :
       ::boost::container::flat_set<::ActsFatras::Particle,detail::CompareParticleId>();
 
-  std::vector<fastjet::PseudoJet> input_particles;
-  
-  int index = 0;
-  
-  ACTS_DEBUG("Number of tracks " << tracks.size());
-  
-  for (auto& track : tracks) {
 
-    //std::cout<<track.momentum()[0]+" "+track.momentum()[1]+" "+track.momentum()[2]<<std::endl;
+  //Form jets
+  std::vector<fastjet::PseudoJet> input_particles;
+  int part_idx = -1;
+  for (const auto& particle : simulatedParticles) {
+
+    part_idx++;
+
+    if (!(particle.status() == 1))
+      continue;
+    if (!particle.isFinal())
+      continue;
+    if (!particle.isVisible())
+      continue;
+    if (!particle.isStable())
+      continue;
+
+    double particle_pt = std::sqrt(particle.fourMomentum()(0)*particle.fourMomentum()(0) +
+                                   particle.fourMomentum()(1)*particle.fourMomentum()(1) );
     
-    //Get 4-momentum with track hypothesis
-    Vector3 trackp = track.momentum();
-    double  trackm = m_cfg.trackMass * 1_GeV;
-    double  E = sqrt(track.absoluteMomentum()*track.absoluteMomentum() + trackm*trackm);
+    if (particle_pt < 0.5 * 1_GeV)
+      continue;
     
-    fastjet::PseudoJet pj(trackp[0],trackp[1],trackp[2],E);
-    pj.set_user_index(index);
+    ACTS_DEBUG("SimParticle Passed to JET building: " << particle.pdg());
+    
+    //Get 4-momentum of the selected particles
+    Acts::Vector4 p4mom = particle.fourMomentum();
+    
+    fastjet::PseudoJet pj(p4mom(0),p4mom(1),p4mom(2),p4mom(3));
+    pj.set_user_index(part_idx);
     input_particles.push_back(pj);
-    index++;
   }
   
   // run the jet clustering with the above jet definition
   //----------------------------------------------------------
   fastjet::ClusterSequence clust_seq(input_particles, *m_jet_def);
   
-  
   // get the resulting jets ordered in pt
   //----------------------------------------------------------
   std::vector<fastjet::PseudoJet> inclusive_jets = sorted_by_pt(clust_seq.inclusive_jets(m_cfg.tj_minPt));
   
-  // print out the details for each jet
+  TrackJetContainer outputTrackJets;
+  outputTrackJets.reserve(inclusive_jets.size());
+  
+  //Prepare each jet
   for (unsigned int i = 0; i < inclusive_jets.size(); i++) {
+    
     // get the constituents of the jet
     std::vector<fastjet::PseudoJet> constituents = inclusive_jets[i].constituents();
     
-    //printf("%5u %15.8f %15.8f %15.8f %8u\n",
-    //	   i, inclusive_jets[i].rap(), inclusive_jets[i].phi(),
-    //	   inclusive_jets[i].perp(), (unsigned int) constituents.size());
+    ACTS_DEBUG(i<<" "<<inclusive_jets[i].rap()<<
+               " "<<inclusive_jets[i].phi()<<
+               " "<<inclusive_jets[i].perp()<<
+               " "<<(unsigned int) constituents.size());
     
-
     fastjet::PseudoJet jet = inclusive_jets[i];
     
     ActsExamples::jetlabel jetType = ClassifyJet(jet,
                                                  simulatedParticles,
                                                  0.4);
     
+    Acts::Vector4 pj_fourmom(jet.px(), jet.py(), jet.pz(), jet.E());
+    TrackJet tj(pj_fourmom, jetType);
+
+    std::vector<int> cons_idxs;
+    cons_idxs.reserve(constituents.size());
+    
+    //Add the particles to the jets
+    for (unsigned int j=0; j<constituents.size(); j++) {
+      cons_idxs.push_back(constituents[j].user_index());
+    }
+    
+    tj.setConstituents(cons_idxs);
+    outputTrackJets.push_back(tj);
   }
+
+  //Associate the tracks to the jets
+  associateTracksToJets(tracks, outputTrackJets, 0.4);
   
-  
-  //ctx.eventStore.add(m_cfg.outputTrackJets, std::move(trackJets));
+  ctx.eventStore.add(m_cfg.outputTrackJets, std::move(outputTrackJets));
   
   return ActsExamples::ProcessCode::SUCCESS;
   
@@ -109,7 +140,7 @@ ActsExamples::jetlabel ActsExamples::TrackJetsAlgorithm::ClassifyJet(const fastj
                       dR);
   
   ACTS_DEBUG("Found "<<simconstituents.size()<<" constituents");
-
+  
   
   std::vector<SimParticle>::iterator it;
   for (it = simconstituents.begin(); it != simconstituents.end(); ++it) {
@@ -198,6 +229,61 @@ ActsExamples::hadronlabel ActsExamples::TrackJetsAlgorithm::defTypeOfHadron(int 
     return ActsExamples::Unknown;
 }
 
+/* This method loops over the tracks in the event and try to associate those to jets
+   - DeltaRmax < 0.4
+   - Associate the track to closest jet. Add the index of the track to the closest jet trk_idxs
+*/
+
+void ActsExamples::TrackJetsAlgorithm::associateTracksToJets(const ActsExamples::TrackParametersContainer& tracks,
+                                                             ActsExamples::TrackJetContainer& jetContainer,
+                                                             double DRmax) const {
+  if (tracks.size() < 1)
+    return;
+
+  for (size_t itrk=0; itrk<tracks.size(); itrk++) {
+
+    double drMin = DRmax;
+    int j_idx = -1;
+    
+    //Form 4-vectors for DR computation.
+    //Mass hypothesis from cfg.
+    //TODO remove double call to pseudojet..
+
+    Vector3 trackp = tracks[itrk].momentum();
+    double  trackm = m_cfg.trackMass * 1_GeV;
+    double  E = sqrt(tracks[itrk].absoluteMomentum()*tracks[itrk].absoluteMomentum() + trackm*trackm);
+    
+    fastjet::PseudoJet trackj(trackp(0),trackp(1),trackp(2),E);
+
+    //Find the closest jet within dRmax
+    //Useless to form the pseudojet every time... TODO FIX 
+    
+    for (size_t ijet=0; ijet<jetContainer.size(); ijet++) {
+
+      const auto jet = jetContainer[ijet];
+      fastjet::PseudoJet jj(jet.getFourMomentum()(0),
+                            jet.getFourMomentum()(1),
+                            jet.getFourMomentum()(2),
+                            jet.getFourMomentum()(3));
+      
+
+      if (trackj.delta_R(jj) < drMin) {
+        
+        j_idx = ijet;
+        drMin = trackj.delta_R(jj);
+        
+      }//dR
+    }//loop on jets
+    
+    //If the matching jet has been found, add the track to the jet.
+
+    ACTS_DEBUG("The found j_idx="<<j_idx);
+    
+    if (j_idx>=0)
+      jetContainer[j_idx].addTrack(itrk);
+    
+  }//loop on tracks
+}//associateTracksToJets
 
 void ActsExamples::TrackJetsAlgorithm::findJetConstituents(const fastjet::PseudoJet& jet,
                                                            const SimParticleContainer& simparticles,
@@ -220,6 +306,7 @@ void ActsExamples::TrackJetsAlgorithm::findJetConstituents(const fastjet::Pseudo
     if (simpj.delta_R(jet) < dR) {
       
       ACTS_DEBUG("SimParticle Component PdgID: " << part.pdg());
+      
       jetconstituents.push_back(part);
       
     }//DeltaR

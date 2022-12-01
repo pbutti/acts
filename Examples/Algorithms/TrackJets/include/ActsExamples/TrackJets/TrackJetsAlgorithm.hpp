@@ -3,6 +3,7 @@
 
 #include "ActsExamples/EventData/Track.hpp"
 #include "ActsExamples/EventData/SimParticle.hpp"
+#include "ActsExamples/EventData/TrackJet.hpp"
 
 #include "ActsExamples/Framework/BareAlgorithm.hpp"
 #include "Acts/Definitions/Units.hpp"
@@ -17,29 +18,6 @@
 using namespace Acts::UnitLiterals;
 
 namespace ActsExamples {
-
-enum jetlabel {
-  unknown = 0,
-  ljet  = 1,
-  cjet  = 4,
-  bjet  = 5
-};
-
-enum hadronlabel {
-  Hadron            = 1,
-  BBbarMesonPart    = 2,
-  CCbarMesonPart    = 3,
-  BottomMesonPart   = 4,
-  BottomBaryonPart  = 5,
-  CharmedMesonPart  = 6,
-  CharmedBaryonPart = 7,
-  StrangeMesonPart  = 8,
-  StrangeBaryonPart = 9,
-  LightMesonPart    = 10,
-  LightBaryonPart   = 11,
-  Unknown           = 12
-};
-  
 
 class TrackJetsAlgorithm final : public BareAlgorithm {
  public:
@@ -85,7 +63,10 @@ class TrackJetsAlgorithm final : public BareAlgorithm {
                                      float dR) const;
     
   ActsExamples::hadronlabel defTypeOfHadron(int pdg) const;
-  
+
+  void associateTracksToJets(const TrackParametersContainer& tracks,
+                             TrackJetContainer& jetContainer,
+                             double DRmax) const ;
 
  private:
   Config m_cfg;

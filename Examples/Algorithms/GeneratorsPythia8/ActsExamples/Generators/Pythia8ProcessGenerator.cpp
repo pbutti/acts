@@ -110,7 +110,7 @@ ActsExamples::SimParticleContainer ActsExamples::Pythia8Generator::operator()(
             1u + std::distance(vertexPositions.begin(), it));
       }
     }
-
+    
     // construct internal particle
     const auto pdg = static_cast<Acts::PdgParticle>(genParticle.id());
     const auto charge = genParticle.charge() * 1_e;
@@ -124,7 +124,13 @@ ActsExamples::SimParticleContainer ActsExamples::Pythia8Generator::operator()(
         1_GeV);
     particle.setIsVisible(genParticle.isVisible());
     particle.setIsFinal(genParticle.isFinal());
-
+    particle.setStatus(genParticle.statusHepMC());
+    
+    if (genParticle.statusHepMC() == 1 && genParticle.daughterList().size() == 0)
+      particle.setIsStable(true);
+    else
+      particle.setIsStable(false);
+    
     generated.push_back(std::move(particle));
   }
   

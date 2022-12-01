@@ -205,12 +205,29 @@ class Particle {
   }
   constexpr bool isFinal() const {return m_isFinal; }
 
-  /// Set partcile as visible
+  /// Set particle as visible
   constexpr Particle &setIsVisible(bool isvisible) {
     m_isVisible = isvisible;
     return *this;
   }
   constexpr bool isVisible() const {return m_isVisible; }
+
+  /// Set particle as visible
+  constexpr Particle &setIsStable(bool isstable) {
+    m_isStable = isstable;
+    return *this;
+  }
+  constexpr bool isStable() const {return m_isStable; }
+
+
+  /// Set particle status
+  constexpr Particle &setStatus(int status) {
+    m_status = status;
+    return *this;
+  }
+
+  constexpr int status() const {return m_status;}
+  
 
  private:
   // identity, i.e. things that do not change over the particle lifetime.
@@ -224,6 +241,10 @@ class Particle {
   bool m_isFinal = true;
   /// Particle tagged as visible from pythia
   bool m_isVisible = true;
+  /// Particle status
+  int m_status = -1;
+  /// Particle stable (status == 1 and no daughters)
+  bool m_isStable = true;
   // Particle charge and mass.
   Scalar m_charge = Scalar(0);
   Scalar m_mass = Scalar(0);

@@ -27,6 +27,9 @@
 #include "ActsExamples/TrackJets/TrackJetsAlgorithm.hpp"
 #include "ActsExamples/Printers/ParticlesPrinter.hpp"
 
+//Writer
+#include "ActsExamples/Io/Root/RootEventWriter.hpp"
+
 //Generator
 #include "ActsExamples/Generators/Pythia8ProcessGenerator.hpp"
 
@@ -67,12 +70,11 @@ int main(int argc, char* argv[]) {
   evgen.randomNumbers = rnd;
   sequencer.addReader(std::make_shared<EventGenerator>(evgen,logLevel));
 
-  
-  //ParticlesPrinter::Config print;
-  //print.inputParticles = evgen.outputParticles;
-  //sequencer.addAlgorithm(std::make_shared<ParticlesPrinter>(print, logLevel));
-  
-  
+
+  //I need two sets of particles:
+  // - The whole generated tree to have the B-hadrons / C-hadrons for jet labelling
+  // - Only the final state particles for jet formation
+
   // pre-select particles
   ParticleSelector::Config selectParticles =
       Options::readParticleSelectorConfig(vars);
@@ -99,13 +101,20 @@ int main(int argc, char* argv[]) {
   TrackJetsAlgorithm::Config trackJetsConfig;
   trackJetsConfig.inputTrackCollection = particleSmearingCfg.outputTrackParameters;
   //trackJetsConfig.simParticles         = selectParticles.outputParticles;
-  trackJetsConfig.simParticles           = evgen.outputParticles;
-  trackJetsConfig.radius = 0.4;
-  trackJetsConfig.outputTrackJets = "TrackJetsAntikt04";
+  trackJetsConfig.simParticles         = evgen.outputParticles;
+  trackJetsConfig.radius               = 0.4;
+  trackJetsConfig.tj_minPt             = 20;
+  trackJetsConfig.outputTrackJets      = "TrackJetsAntikt04";
 
   sequencer.addAlgorithm(std::make_shared<TrackJetsAlgorithm>(
       trackJetsConfig,logLevel));
 
+  RootEventWriter::Config evtWriterConfig;
+  evtWriterConfig.inputJets            = trackJetsConfig.outputTrackJets;
+  evtWriterConfig.inputTrackParameters = particleSmearingCfg.outputTrackParameters;
+  
+  //sequencer.addWriter(
+  //    std::make_shared<RootEventWriter>(evtWriterConfig,logLevel));
         
   return sequencer.run();
                           

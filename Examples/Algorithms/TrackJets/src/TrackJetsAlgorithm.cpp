@@ -4,6 +4,10 @@
 #include "MCUtils/PIDUtils.h"
 #include <stdexcept>
 
+#include "Acts/Utilities/Helpers.hpp"
+
+using Acts::VectorHelpers::eta;
+using Acts::VectorHelpers::theta;
 
 using namespace Acts;
 
@@ -100,7 +104,7 @@ ActsExamples::ProcessCode ActsExamples::TrackJetsAlgorithm::execute(
     
     Acts::Vector4 pj_fourmom(jet.px(), jet.py(), jet.pz(), jet.E());
     TrackJet tj(pj_fourmom, jetType);
-
+    
     std::vector<int> cons_idxs;
     cons_idxs.reserve(constituents.size());
     

@@ -1,18 +1,3 @@
-/*    addPythia8(
-        s,
-        hardProcess=["Top:qqbar2ttbar=on"],
-        npileup=200,
-        vtxGen=acts.examples.GaussianVertexGenerator(
-            stddev=acts.Vector4(0.0125 * u.mm, 0.0125 * u.mm, 55.5 * u.mm, 5.0 * u.ns),
-            mean=acts.Vector4(0, 0, 0, 0),
-        ),
-        rnd=rnd,
-        outputDirRoot=outputDir,
-    )
-*/
-
-
-
 #include "Acts/Definitions/Units.hpp"
 #include "ActsExamples/Options/CommonOptions.hpp"
 #include "ActsExamples/Options/ParticleSelectorOptions.hpp"
@@ -95,8 +80,6 @@ int main(int argc, char* argv[]) {
   auto particleSmearingCfg = setupParticleSmearing(
       vars, sequencer, rnd, selectParticles.outputParticles);
 
-  
-  
   // Pass the smeared particles to the track jets algorithm
   TrackJetsAlgorithm::Config trackJetsConfig;
   trackJetsConfig.inputTrackCollection = particleSmearingCfg.outputTrackParameters;
@@ -113,8 +96,8 @@ int main(int argc, char* argv[]) {
   evtWriterConfig.inputJets            = trackJetsConfig.outputTrackJets;
   evtWriterConfig.inputTrackParameters = particleSmearingCfg.outputTrackParameters;
   
-  //sequencer.addWriter(
-  //    std::make_shared<RootEventWriter>(evtWriterConfig,logLevel));
+  sequencer.addWriter(
+      std::make_shared<RootEventWriter>(evtWriterConfig,logLevel));
         
   return sequencer.run();
                           

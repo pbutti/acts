@@ -1157,3 +1157,40 @@ def addVertexFitting(
         )
 
     return s
+
+
+def addTrackJets(
+        s,
+        outputDirRoot : Optional[Union[Path,str]] = None,
+        inputTrackCollection : Optional[str] = "tracks",
+        particles : Optional[str] = None,
+        radius : Optional[float] = 0.4,
+        trackMass : Optional[float] = 0.135,
+        tj_minPt  : Optional[float] = 20.,
+        outputTrackJets : Optional[str] = "jets"
+) -> None:
+
+    """ This function steers the jet clustering and track-to-jet association
+
+    Parameters
+    ----------
+
+    s: Sequencer
+        the sequencer module.
+    outputDirRoot : Path|str, path, None
+        the output folder for the Root output, None triggers no output
+    """
+    from acts.examples import (
+        TrackJetsAlgorithm,
+    #    RootEventWriter,  <== still to be defined
+    )
+
+    trackjetsAlgorithm = TrackJetsAlgorithm(
+        inputTrackCollection="estimatedparameters",
+        outputTrackJets="jets",
+        level=acts.logging.INFO
+    )
+
+    s.addAlgorithm(trackjetsAlgorithm)
+
+    return s

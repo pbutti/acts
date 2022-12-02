@@ -96,6 +96,7 @@ void addTrackFitting(Context& ctx);
 void addTrackFittingChi2(Context& ctx);
 void addTrackFinding(Context& ctx);
 void addVertexing(Context& ctx);
+void addTrackJets(Context& ctx);
 
 // Plugins
 void addDigitization(Context& ctx);
@@ -251,6 +252,7 @@ PYBIND11_MODULE(ActsPythonBindings, m) {
   addTrackFittingChi2(ctx);
   addTrackFinding(ctx);
   addVertexing(ctx);
+  addTrackJets(ctx);
 
   addDigitization(ctx);
   addPythia8(ctx);

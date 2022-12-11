@@ -43,6 +43,7 @@ void addTrackJets(Context& ctx) {
 
     ACTS_PYTHON_STRUCT_BEGIN(c, Config);
     ACTS_PYTHON_MEMBER(inputTrackCollection);
+    ACTS_PYTHON_MEMBER(inputTrajectories);
     ACTS_PYTHON_MEMBER(simParticles);
     ACTS_PYTHON_MEMBER(radius);
     ACTS_PYTHON_MEMBER(trackMass);

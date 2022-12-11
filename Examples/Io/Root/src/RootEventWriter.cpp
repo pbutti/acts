@@ -20,6 +20,7 @@
 #include "ActsExamples/Utilities/Paths.hpp"
 #include "ActsExamples/Utilities/Range.hpp"
 #include "ActsExamples/Validation/TrackClassification.hpp"
+#include "ActsExamples/EventData/Trajectories.hpp"
 
 #include <ios>
 #include <iostream>
@@ -201,25 +202,31 @@ ActsExamples::ProcessCode ActsExamples::RootEventWriter::writeT(
   const auto& jets =
       ctx.eventStore.get<TrackJetContainer>(m_cfg.inputJets);
   
-  const auto& tracks =
-      ctx.eventStore.get<TrackParametersContainer>(m_cfg.inputTrackParameters);
+  const auto& inputTrajectories =
+      ctx.eventStore.get<TrajectoriesContainer>(m_cfg.inputTrajectories);
   
-  //const auto& particles =
-  //    ctx.eventStore.get<SimParticleContainer>(m_cfg.inputParticles);
-  
-  
-  /*
-  const auto& protoTracks =
-      ctx.eventStore.get<ProtoTrackContainer>(m_cfg.inputProtoTracks);
-  
+  ACTS_INFO("RootWriter::Number of "<<m_cfg.inputTrajectories << " "<< inputTrajectories.size());
 
+  TrackParametersContainer tracks;
   
-  const auto& simHits = ctx.eventStore.get<SimHitContainer>(m_cfg.inputSimHits);
-  const auto& hitParticlesMap =
-      ctx.eventStore.get<HitParticlesMap>(m_cfg.inputMeasurementParticlesMap);
-  const auto& hitSimHitsMap =
-      ctx.eventStore.get<HitSimHitsMap>(m_cfg.inputMeasurementSimHitsMap);
-  */
+  for (const auto& trajectories : inputTrajectories) {
+    std::vector<Acts::MultiTrajectoryTraits::IndexType> tips;
+    
+    //unordered map of tip:TrackParameters
+    Trajectories::IndexedParameters idx_parameters;
+    
+    for (auto tip : trajectories.tips()) {
+      if (!trajectories.hasTrackParameters(tip))
+        continue;
+      
+      idx_parameters.emplace(tip, trajectories.trackParameters(tip));
+      tracks.push_back(trajectories.trackParameters(tip));
+      
+    }//tip loop
+  }
+  
+  ACTS_INFO("RootWriter::Number of tracks" << tracks.size());
+    
   // Exclusive access to the tree while writing
   std::lock_guard<std::mutex> lock(m_writeMutex);
 

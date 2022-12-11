@@ -33,16 +33,14 @@ class RootEventWriter final : public TrackJetWriter {
     std::string inputJets;
     /// Input estimated track parameters collection.
     std::string inputTrackParameters;
+    // Input trajectories
+    std::string inputTrajectories;
     /// Input reconstructed proto tracks collection.
     std::string inputProtoTracks;
     /// Input particles collection.
     std::string inputParticles;
     /// Input collection of simulated hits.
     std::string inputSimHits;
-    /// Input hit-particles map collection.
-    std::string inputMeasurementParticlesMap;
-    /// Input collection to map measured hits to simulated hits.
-    std::string inputMeasurementSimHitsMap;
     /// output filename.
     std::string filePath = "events.root";
     /// name of the output tree.

@@ -25,7 +25,9 @@ class TrackJetsAlgorithm final : public BareAlgorithm {
   struct Config {
     /// Input track collection
     std::string inputTrackCollection;
-
+    /// Input trajectories
+    std::string inputTrajectories;
+    
     /// The simulated particles (for truth studies only, empty otherwise)
     std::string simParticles;
     

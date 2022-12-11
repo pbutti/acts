@@ -5,6 +5,7 @@
 #include <stdexcept>
 
 #include "Acts/Utilities/Helpers.hpp"
+#include "ActsExamples/EventData/Trajectories.hpp"
 
 using Acts::VectorHelpers::eta;
 using Acts::VectorHelpers::theta;
@@ -16,7 +17,7 @@ ActsExamples::TrackJetsAlgorithm::TrackJetsAlgorithm(
     : ActsExamples::BareAlgorithm("TrackJetsAlgorithm", level),
       m_cfg(std::move(config)) {
   
-  if (m_cfg.inputTrackCollection.empty()) {
+  if (m_cfg.inputTrackCollection.empty() == m_cfg.inputTrajectories.empty()) {
     throw std::invalid_argument("Missing input track collection");
   }
   if (m_cfg.outputTrackJets.empty()) {
@@ -30,18 +31,40 @@ ActsExamples::TrackJetsAlgorithm::TrackJetsAlgorithm(
 ActsExamples::ProcessCode ActsExamples::TrackJetsAlgorithm::execute(
     const ActsExamples::AlgorithmContext& ctx) const {
 
-  //Read input data
-  const auto& tracks =
-      ctx.eventStore.get<TrackParametersContainer>(m_cfg.inputTrackCollection);
+  TrackParametersContainer tracks;
   
-  ACTS_DEBUG("Number of tracks " << tracks.size());
+  //Read input data
+  //const auto& tracks = 
+  //    ctx.eventStore.get<TrackParametersContainer>(m_cfg.inputTrackCollection);
+  
+  const auto& inputTrajectories =
+      ctx.eventStore.get<TrajectoriesContainer>(m_cfg.inputTrajectories);
+
+  ACTS_INFO("TrackJetsAlgorithm::Number of "<<m_cfg.inputTrajectories << " "<< inputTrajectories.size());
+  
+  for (const auto& trajectories : inputTrajectories) {
+    std::vector<Acts::MultiTrajectoryTraits::IndexType> tips;
     
+    //unordered map of tip:TrackParameters
+    Trajectories::IndexedParameters idx_parameters;
+    
+    for (auto tip : trajectories.tips()) {
+      if (!trajectories.hasTrackParameters(tip))
+        continue;
+      
+      idx_parameters.emplace(tip, trajectories.trackParameters(tip));
+      tracks.push_back(trajectories.trackParameters(tip));
+      
+    }//tip loop
+  }
+  
+  ACTS_INFO("TrackJetsAlgorithm::Number of tracks " << tracks.size());
+      
   //Empty set if simParticles is not set in configuration
   const auto& simulatedParticles =
       (!m_cfg.simParticles.empty()) ? ctx.eventStore.get<SimParticleContainer>(m_cfg.simParticles) :
       ::boost::container::flat_set<::ActsFatras::Particle,detail::CompareParticleId>();
-
-
+  
   //Form jets
   std::vector<fastjet::PseudoJet> input_particles;
   int part_idx = -1;

@@ -43,7 +43,7 @@ target_link_libraries(
 # Install ROOT pcm file
 
 
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/libEventDic_rdict.pcm
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/../../../lib/libEventDict_rdict.pcm
         DESTINATION ${CMAKE_INSTALL_PREFIX})
 
 

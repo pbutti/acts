@@ -1068,6 +1068,8 @@ def addVertexFitting(
     customLogLevel = acts.examples.defaultLogging(s, logLevel)
 
     if trackSelectorRanges is not None:
+
+        print("PF::Running the track selector=")
         trackSelector = addTrackSelection(
             s,
             trackSelectorRanges,
@@ -1077,7 +1079,7 @@ def addVertexFitting(
             outputTrajectories="selectedTrajectoriesVertexing",
             logLevel=customLogLevel(),
         )
-
+        
         trajectories = trackSelector.config.outputTrajectories if trajectories else ""
         trackParameters = (
             trackSelector.config.outputTrackParameters if trackParameters else ""
@@ -1087,6 +1089,12 @@ def addVertexFitting(
     selectedParticles = "particles_selected"
     outputVertices = "fittedVertices"
 
+    print("PF::VertexTrajectories=",trajectories)
+    print("PF::trackParameters=",trackParameters)
+
+
+
+    
     outputTime = ""
     if vertexFinder == VertexFinder.Truth:
         findVertices = TruthVertexFinder(
@@ -1162,8 +1170,9 @@ def addVertexFitting(
 def addTrackJets(
         s,
         outputDirRoot : Optional[Union[Path,str]] = None,
-        inputTrackCollection : Optional[str] = "tracks",
-        particles : Optional[str] = None,
+        input_TrackCollection : Optional[str] = "tracks",
+        input_Trajectories    : Optional[str] = "trajectories",
+        input_Particles : Optional[str] = None,
         radius : Optional[float] = 0.4,
         trackMass : Optional[float] = 0.135,
         tj_minPt  : Optional[float] = 20.,
@@ -1182,15 +1191,35 @@ def addTrackJets(
     """
     from acts.examples import (
         TrackJetsAlgorithm,
-    #    RootEventWriter,  <== still to be defined
+        RootEventWriter,
     )
 
+    
     trackjetsAlgorithm = TrackJetsAlgorithm(
-        inputTrackCollection="estimatedparameters",
-        outputTrackJets="jets",
+        inputTrackCollection="",
+        inputTrajectories   = input_Trajectories,
+        simParticles        = input_Particles,
+        radius              = 0.4,
+        tj_minPt            = 20.,
+        outputTrackJets=outputTrackJets,
         level=acts.logging.INFO
     )
 
     s.addAlgorithm(trackjetsAlgorithm)
+
+    print("outputDirRoot==",outputDirRoot)
+    if outputDirRoot is not None:
+        outputDirRoot = Path(outputDirRoot)
+        if not outputDirRoot.exists():
+            outputDirRoot.mkdir()
+        s.addWriter(
+            RootEventWriter(
+                level=acts.logging.DEBUG,
+                inputJets=outputTrackJets,
+                inputTrajectories=input_Trajectories,
+                treeName="events",
+                filePath=str(outputDirRoot / "events.root"),
+            )
+        )
 
     return s

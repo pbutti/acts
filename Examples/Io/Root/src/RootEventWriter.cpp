@@ -41,31 +41,31 @@ ActsExamples::RootEventWriter::RootEventWriter(
                            "RootEventWriter", level),
       m_cfg(config) {
   /*
-  if (m_cfg.inputJets.empty()) {
+    if (m_cfg.inputJets.empty()) {
     throw std::invalid_argument("Missing jets input collection");
-  }
-  if (m_cfg.inputProtoTracks.empty()) {
+    }
+    if (m_cfg.inputProtoTracks.empty()) {
     throw std::invalid_argument("Missing proto tracks input collection");
-  }
-  if (m_cfg.inputParticles.empty()) {
+    }
+    if (m_cfg.inputParticles.empty()) {
     throw std::invalid_argument("Missing particles input collection");
-  }
-  if (m_cfg.inputSimHits.empty()) {
+    }
+    if (m_cfg.inputSimHits.empty()) {
     throw std::invalid_argument("Missing simulated hits input collection");
-  }
-  if (m_cfg.inputMeasurementParticlesMap.empty()) {
+    }
+    if (m_cfg.inputMeasurementParticlesMap.empty()) {
     throw std::invalid_argument("Missing hit-particles map input collection");
-  }
-  if (m_cfg.inputMeasurementSimHitsMap.empty()) {
+    }
+    if (m_cfg.inputMeasurementSimHitsMap.empty()) {
     throw std::invalid_argument(
-        "Missing hit-simulated-hits map input collection");
-  }
-  if (m_cfg.filePath.empty()) {
+    "Missing hit-simulated-hits map input collection");
+    }
+    if (m_cfg.filePath.empty()) {
     throw std::invalid_argument("Missing output filename");
-  }
-  if (m_cfg.treeName.empty()) {
+    }
+    if (m_cfg.treeName.empty()) {
     throw std::invalid_argument("Missing tree name");
-  }
+    }
   */
 
   // Setup ROOT I/O
@@ -94,7 +94,6 @@ ActsExamples::RootEventWriter::RootEventWriter(
     m_outputTree->Branch("jet_isPU",&m_jet_isPU);
     m_outputTree->Branch("jet_isHS",&m_jet_isHS);
     m_outputTree->Branch("jet_label",&m_jet_label);
-    
     
     //Tracks in jets
     m_outputTree->Branch("track_prob",       &m_tracks_prob);
@@ -128,7 +127,7 @@ ActsExamples::RootEventWriter::RootEventWriter(
     m_outputTree->Branch("track_cov_z0qOverP"   ,&m_trk_cov_z0qOverP);
     m_outputTree->Branch("track_cov_phitheta"   ,&m_trk_cov_phitheta);
     m_outputTree->Branch("track_cov_phiqOverP"  ,&m_trk_cov_phiqOverP);
-    m_outputTree->Branch("track_cov_tehtaqOverP",&m_trk_cov_tehtaqOverP);
+    m_outputTree->Branch("track_cov_tehtaqOverP",&m_trk_cov_thetaqOverP);
 
     m_outputTree->Branch("track_numPix1L" ,&m_trk_numPix1L);    
     m_outputTree->Branch("track_numPix2L" ,&m_trk_numPix2L);   
@@ -136,22 +135,6 @@ ActsExamples::RootEventWriter::RootEventWriter(
     m_outputTree->Branch("track_numSCT"   ,&m_trk_numSCT);  
     m_outputTree->Branch("track_numLSCT"  ,&m_trk_numLSCT);
 
-    
-    
-    // The estimated track parameters
-    /*
-    
-    m_outputTree->Branch("loc0", &m_loc0);
-    m_outputTree->Branch("loc1", &m_loc1);
-    m_outputTree->Branch("phi", &m_phi);
-    m_outputTree->Branch("theta", &m_theta);
-    m_outputTree->Branch("qop", &m_qop);
-    m_outputTree->Branch("time", &m_time);
-    m_outputTree->Branch("p", &m_p);
-    m_outputTree->Branch("pt", &m_pt);
-    m_outputTree->Branch("eta", &m_eta);
-    */
-   
     // The truth track parameters
     /*
     m_outputTree->Branch("eventNr", &m_eventNr);
@@ -191,7 +174,10 @@ ActsExamples::ProcessCode ActsExamples::RootEventWriter::writeT(
     using HitSimHitsMap = IndexMultimap<Index>;
   */
 
-  //Make sure everytghing is clear
+  // Exclusive access to all the writing procedure
+  std::lock_guard<std::mutex> lock(m_writeMutex);
+  
+  //Make sure everything is clear
   Clear();
   
   if (m_outputFile == nullptr) {
@@ -227,78 +213,10 @@ ActsExamples::ProcessCode ActsExamples::RootEventWriter::writeT(
   }
   
   ACTS_INFO("RootWriter::Number of tracks" << tracks.size());
-    
-  // Exclusive access to the tree while writing
-  std::lock_guard<std::mutex> lock(m_writeMutex);
-
+  
   // Get the event number
   m_eventNr = ctx.eventNumber;
 
-  /*
-  // Loop over the estimated track parameters
-  for (size_t iparams = 0; iparams < trackParams.size(); ++iparams) {
-    // The reference surface of the parameters, i.e. also the reference surface
-    // of the first space point
-    const auto& surface = trackParams[iparams].referenceSurface();
-    // The estimated bound parameters vector
-    const auto params = trackParams[iparams].parameters();
-    m_loc0 = params[Acts::eBoundLoc0];
-    m_loc1 = params[Acts::eBoundLoc1];
-    m_phi = params[Acts::eBoundPhi];
-    m_theta = params[Acts::eBoundTheta];
-    m_qop = params[Acts::eBoundQOverP];
-    m_time = params[Acts::eBoundTime];
-    m_p = std::abs(1.0 / m_qop);
-    m_pt = m_p * std::sin(m_theta);
-    m_eta = std::atanh(std::cos(m_theta));
-
-    // Get the proto track from which the track parameters are estimated
-    const auto& ptrack = protoTracks[iparams];
-    std::vector<ParticleHitCount> particleHitCounts;
-    identifyContributingParticles(hitParticlesMap, ptrack, particleHitCounts);
-    m_truthMatched = false;
-    if (particleHitCounts.size() == 1) {
-      m_truthMatched = true;
-    }
-    // Get the index of the first space point
-    const auto& hitIdx = ptrack.front();
-    // Get the sim hits via the measurement to sim hits map
-    auto indices = makeRange(hitSimHitsMap.equal_range(hitIdx));
-    auto [truthLocal, truthPos4, truthUnitDir] =
-        averageSimHits(ctx.geoContext, surface, simHits, indices);
-    // Get the truth track parameter at the first space point
-    m_t_loc0 = truthLocal[Acts::ePos0];
-    m_t_loc1 = truthLocal[Acts::ePos1];
-    m_t_phi = phi(truthUnitDir);
-    m_t_theta = theta(truthUnitDir);
-    m_t_time = truthPos4[Acts::eTime];
-    // momemtum averaging makes even less sense than averaging position and
-    // direction. use the first momentum or set q/p to zero
-    if (not indices.empty()) {
-      // we assume that the indices are within valid ranges so we do not
-      // need to check their validity again.
-      const auto simHitIdx0 = indices.begin()->second;
-      const auto& simHit0 = *simHits.nth(simHitIdx0);
-      const auto p =
-          simHit0.momentum4Before().template segment<3>(Acts::eMom0).norm();
-      const auto& particleId = simHit0.particleId();
-      // The truth charge has to be retrieved from the sim particle
-      auto ip = particles.find(particleId);
-      if (ip != particles.end()) {
-        const auto& particle = *ip;
-        m_t_charge = particle.charge();
-        m_t_qop = m_t_charge / p;
-      } else {
-        ACTS_WARNING("Truth particle with barcode = " << particleId
-                                                      << " not found!");
-      }
-    }
-    
-    
-    m_outputTree->Fill();
-    } */
-
-    
   for (size_t ijets = 0; ijets < jets.size(); ++ijets) {
     Acts::Vector4 jet_4mom = jets[ijets].getFourMomentum();
 
@@ -320,7 +238,12 @@ ActsExamples::ProcessCode ActsExamples::RootEventWriter::writeT(
   //Get all the tracks 
   for (auto& trk_params : tracks) { 
     
-    const auto params = trk_params.parameters();
+    const auto params  = trk_params.parameters();
+
+    if (!trk_params.covariance().has_value())
+      throw std::runtime_error("Track is missing covariance matrix");
+    
+    const auto& cov    = *trk_params.covariance();
     
     float trk_theta = params[Acts::eBoundTheta];
     float trk_eta   = std::atanh(std::cos(trk_theta));
@@ -343,21 +266,21 @@ ActsExamples::ProcessCode ActsExamples::RootEventWriter::writeT(
     m_trk_t120.push_back(1.);           //todo
     m_trk_t180.push_back(1.);           //todo
     m_trk_z.push_back(1.);              //todo
-    m_trk_var_d0.push_back(1.);         
-    m_trk_var_z0.push_back(1.);         
-    m_trk_var_phi.push_back(1.);        
-    m_trk_var_theta.push_back(1.);      
-    m_trk_var_qOverP.push_back(1.);     
-    m_trk_cov_d0z0.push_back(1.);       
-    m_trk_cov_d0phi.push_back(1.);      
-    m_trk_cov_d0theta.push_back(1.);    
-    m_trk_cov_d0qOverP.push_back(1.);   
-    m_trk_cov_z0phi.push_back(1.);      
-    m_trk_cov_z0theta.push_back(1.);    
-    m_trk_cov_z0qOverP.push_back(1.);   
-    m_trk_cov_phitheta.push_back(1.);   
-    m_trk_cov_phiqOverP.push_back(1.);  
-    m_trk_cov_tehtaqOverP.push_back(1.);
+    m_trk_var_d0.push_back(cov(Acts::eBoundLoc0,Acts::eBoundLoc0));         
+    m_trk_var_z0.push_back(cov(Acts::eBoundLoc1,Acts::eBoundLoc1));         
+    m_trk_var_phi.push_back(cov(Acts::eBoundPhi,Acts::eBoundPhi));        
+    m_trk_var_theta.push_back(cov(Acts::eBoundTheta,Acts::eBoundTheta));      
+    m_trk_var_qOverP.push_back(cov(Acts::eBoundQOverP,Acts::eBoundQOverP));     
+    m_trk_cov_d0z0.push_back(cov(Acts::eBoundLoc0,Acts::eBoundLoc1));       
+    m_trk_cov_d0phi.push_back(cov(Acts::eBoundLoc0,Acts::eBoundPhi));      
+    m_trk_cov_d0theta.push_back(cov(Acts::eBoundLoc0,Acts::eBoundTheta));    
+    m_trk_cov_d0qOverP.push_back(cov(Acts::eBoundLoc0,Acts::eBoundQOverP));   
+    m_trk_cov_z0phi.push_back(cov(Acts::eBoundLoc1,Acts::eBoundPhi));      
+    m_trk_cov_z0theta.push_back(cov(Acts::eBoundLoc1,Acts::eBoundTheta));    
+    m_trk_cov_z0qOverP.push_back(cov(Acts::eBoundLoc1,Acts::eBoundQOverP));   
+    m_trk_cov_phitheta.push_back(cov(Acts::eBoundPhi,Acts::eBoundTheta));   
+    m_trk_cov_phiqOverP.push_back(cov(Acts::eBoundPhi,Acts::eBoundQOverP));  
+    m_trk_cov_thetaqOverP.push_back(cov(Acts::eBoundTheta,Acts::eBoundQOverP));
     
   } //Tracks
   
@@ -412,6 +335,6 @@ void ActsExamples::RootEventWriter::Clear() {
   m_trk_cov_z0qOverP.clear();   
   m_trk_cov_phitheta.clear();   
   m_trk_cov_phiqOverP.clear();  
-  m_trk_cov_tehtaqOverP.clear();
+  m_trk_cov_thetaqOverP.clear();
   
 }

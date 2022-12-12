@@ -124,7 +124,7 @@ class RootEventWriter final : public TrackJetWriter {
   std::vector<float> m_trk_cov_z0qOverP;   
   std::vector<float> m_trk_cov_phitheta;   
   std::vector<float> m_trk_cov_phiqOverP;  
-  std::vector<float> m_trk_cov_tehtaqOverP;
+  std::vector<float> m_trk_cov_thetaqOverP;
   
   std::vector<int> m_trk_numPix1L;    
   std::vector<int> m_trk_numPix2L;   

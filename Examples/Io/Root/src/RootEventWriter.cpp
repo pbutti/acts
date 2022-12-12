@@ -89,7 +89,8 @@ ActsExamples::RootEventWriter::RootEventWriter(
     m_outputTree->Branch("jet_eta",&m_jet_eta);
     m_outputTree->Branch("jet_phi",&m_jet_phi);
     m_outputTree->Branch("jet_ncomponents",&m_jet_ncomponents);
-    m_outputTree->Branch("jet_tracks_idx",&m_jet_components);
+    m_outputTree->Branch("jet_components",&m_jet_components);
+    m_outputTree->Branch("jet_tracks_idx",&m_jet_tracks_idx);
     m_outputTree->Branch("jet_isPU",&m_jet_isPU);
     m_outputTree->Branch("jet_isHS",&m_jet_isHS);
     m_outputTree->Branch("jet_label",&m_jet_label);
@@ -309,54 +310,57 @@ ActsExamples::ProcessCode ActsExamples::RootEventWriter::writeT(
 
     m_jet_ncomponents.push_back(jets[ijets].getConstituents().size());
     m_jet_components.push_back(jets[ijets].getConstituents());
+    m_jet_tracks_idx.push_back(jets[ijets].getTracks());
     
     m_jet_label.push_back(static_cast<int>(jets[ijets].getLabel()));
 
-    //Get the tracks belonging to this jet
-    for (auto& ic : jets[ijets].getTracks()) { 
-      
-      TrackParameters trk_params = tracks.at(ic);
-      const auto params = trk_params.parameters();
 
-      float trk_theta = params[Acts::eBoundTheta];
-      float trk_eta   = std::atanh(std::cos(trk_theta));
-      float trk_qop   = params[Acts::eBoundQOverP];
-      float trk_p     = std::abs(1.0 / trk_qop);
-      float trk_pt    = trk_p * std::sin(trk_theta); 
-      
-      m_tracks_prob.push_back(1.);   // todo
-      m_trk_d0.push_back(params[Acts::eBoundLoc0]);             
-      m_trk_z0.push_back(params[Acts::eBoundLoc1]);             
-      m_trk_eta.push_back(trk_eta);            
-      m_trk_theta.push_back(trk_theta);          
-      m_trk_phi.push_back(params[Acts::eBoundPhi]);            
-      m_trk_pt.push_back(trk_pt);             
-      m_trk_qOverP.push_back(trk_p);         
-      m_trk_t.push_back(params[Acts::eBoundTime]);              
-      m_trk_t30.push_back(1.);            //todo
-      m_trk_t60.push_back(1.);            //todo
-      m_trk_t90.push_back(1.);            //todo
-      m_trk_t120.push_back(1.);           //todo
-      m_trk_t180.push_back(1.);           //todo
-      m_trk_z.push_back(1.);              //todo
-      m_trk_var_d0.push_back(1.);         
-      m_trk_var_z0.push_back(1.);         
-      m_trk_var_phi.push_back(1.);        
-      m_trk_var_theta.push_back(1.);      
-      m_trk_var_qOverP.push_back(1.);     
-      m_trk_cov_d0z0.push_back(1.);       
-      m_trk_cov_d0phi.push_back(1.);      
-      m_trk_cov_d0theta.push_back(1.);    
-      m_trk_cov_d0qOverP.push_back(1.);   
-      m_trk_cov_z0phi.push_back(1.);      
-      m_trk_cov_z0theta.push_back(1.);    
-      m_trk_cov_z0qOverP.push_back(1.);   
-      m_trk_cov_phitheta.push_back(1.);   
-      m_trk_cov_phiqOverP.push_back(1.);  
-      m_trk_cov_tehtaqOverP.push_back(1.);
-            
-    } //getTracks
   } // jets
+  
+  //Get all the tracks 
+  for (auto& trk_params : tracks) { 
+    
+    const auto params = trk_params.parameters();
+    
+    float trk_theta = params[Acts::eBoundTheta];
+    float trk_eta   = std::atanh(std::cos(trk_theta));
+    float trk_qop   = params[Acts::eBoundQOverP];
+    float trk_p     = std::abs(1.0 / trk_qop);
+    float trk_pt    = trk_p * std::sin(trk_theta); 
+    
+    m_tracks_prob.push_back(1.);   // todo
+    m_trk_d0.push_back(params[Acts::eBoundLoc0]);             
+    m_trk_z0.push_back(params[Acts::eBoundLoc1]);             
+    m_trk_eta.push_back(trk_eta);            
+    m_trk_theta.push_back(trk_theta);          
+    m_trk_phi.push_back(params[Acts::eBoundPhi]);            
+    m_trk_pt.push_back(trk_pt);             
+    m_trk_qOverP.push_back(trk_p);         
+    m_trk_t.push_back(params[Acts::eBoundTime]);              
+    m_trk_t30.push_back(1.);            //todo
+    m_trk_t60.push_back(1.);            //todo
+    m_trk_t90.push_back(1.);            //todo
+    m_trk_t120.push_back(1.);           //todo
+    m_trk_t180.push_back(1.);           //todo
+    m_trk_z.push_back(1.);              //todo
+    m_trk_var_d0.push_back(1.);         
+    m_trk_var_z0.push_back(1.);         
+    m_trk_var_phi.push_back(1.);        
+    m_trk_var_theta.push_back(1.);      
+    m_trk_var_qOverP.push_back(1.);     
+    m_trk_cov_d0z0.push_back(1.);       
+    m_trk_cov_d0phi.push_back(1.);      
+    m_trk_cov_d0theta.push_back(1.);    
+    m_trk_cov_d0qOverP.push_back(1.);   
+    m_trk_cov_z0phi.push_back(1.);      
+    m_trk_cov_z0theta.push_back(1.);    
+    m_trk_cov_z0qOverP.push_back(1.);   
+    m_trk_cov_phitheta.push_back(1.);   
+    m_trk_cov_phiqOverP.push_back(1.);  
+    m_trk_cov_tehtaqOverP.push_back(1.);
+    
+  } //Tracks
+  
   
   m_outputTree->Fill();
 

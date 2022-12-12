@@ -306,8 +306,10 @@ void ActsExamples::TrackJetsAlgorithm::associateTracksToJets(const ActsExamples:
 
     ACTS_DEBUG("The found j_idx="<<j_idx);
     
-    if (j_idx>=0)
+    if (j_idx>=0) {
       jetContainer[j_idx].addTrack(itrk);
+      ACTS_DEBUG("Added track:"<<itrk);
+    }
     
   }//loop on tracks
 }//associateTracksToJets

@@ -1169,9 +1169,11 @@ def addVertexFitting(
 
 def addTrackJets(
         s,
+        field,
         outputDirRoot : Optional[Union[Path,str]] = None,
         input_TrackCollection : Optional[str] = "tracks",
         input_Trajectories    : Optional[str] = "trajectories",
+        input_Vertices        : Optional[str] = "fittedVertices",
         input_Particles : Optional[str] = None,
         radius : Optional[float] = 0.4,
         trackMass : Optional[float] = 0.135,
@@ -1214,9 +1216,11 @@ def addTrackJets(
             outputDirRoot.mkdir()
         s.addWriter(
             RootEventWriter(
-                level=acts.logging.DEBUG,
+                field=field,
+                level=acts.logging.INFO,
                 inputJets=outputTrackJets,
                 inputTrajectories=input_Trajectories,
+                recoVertices = input_Vertices,
                 treeName="events",
                 filePath=str(outputDirRoot / "events.root"),
             )

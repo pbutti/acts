@@ -12,13 +12,31 @@
 #include "ActsExamples/EventData/TrackJet.hpp"
 #include "ActsExamples/Framework/WriterT.hpp"
 
+//This I need to compute the ip2d and ip3d - to do: move this into an algorithm
+#include "Acts/Vertexing/ImpactPointEstimator.hpp" 
+#include "Acts/MagneticField/MagneticFieldProvider.hpp"
+#include "Acts/Propagator/EigenStepper.hpp"
+#include "Acts/Propagator/Propagator.hpp"
+
 #include <mutex>
+#include <memory>
+
 
 class TFile;
 class TTree;
 
+
+using Propagator = Acts::Propagator<Acts::EigenStepper<>>;
+using PropagatorOptions = Acts::PropagatorOptions<>;
+using ImpactPointEstimator =
+      Acts::ImpactPointEstimator<Acts::BoundTrackParameters, Propagator>;
+using VertexContainer =
+    std::vector<Acts::Vertex<Acts::BoundTrackParameters>>;
+
 namespace ActsExamples {
 
+
+//All the using.
 using TrackJetWriter = WriterT<TrackJetContainer>;
 
 /// Write out the Event using track parameters and track jets from both simulation and those estimated from
@@ -35,6 +53,9 @@ class RootEventWriter final : public TrackJetWriter {
     std::string inputTrackParameters;
     // Input trajectories
     std::string inputTrajectories;
+    // Input Reco Vertices
+    std::string recoVertices;
+    
     /// Input reconstructed proto tracks collection.
     std::string inputProtoTracks;
     /// Input particles collection.
@@ -47,6 +68,9 @@ class RootEventWriter final : public TrackJetWriter {
     std::string treeName = "events";
     /// file access mode.
     std::string fileMode = "RECREATE";
+    /// the magnetic field provider
+    std::shared_ptr<Acts::MagneticFieldProvider> field;
+   
   };
 
   /// Constructor
@@ -78,8 +102,17 @@ class RootEventWriter final : public TrackJetWriter {
 
   void Clear();
   
-  
 
+  //Vertices//
+  std::vector<float> m_vtx_x;
+  std::vector<float> m_vtx_y;
+  std::vector<float> m_vtx_z;
+  std::vector<float> m_vtx_t;
+  std::vector<float> m_vtx_sumPt2;
+  std::vector<int> m_vtx_isHS;
+  std::vector<int> m_vtx_isPU;
+  
+  
   //Jets//
 
   //skipping jet_m, jet_q
@@ -96,7 +129,11 @@ class RootEventWriter final : public TrackJetWriter {
   //Tracks in jets
   std::vector<float> m_tracks_prob;
   std::vector<float> m_trk_d0;        
-  std::vector<float> m_trk_z0;        
+  std::vector<float> m_trk_z0;
+  std::vector<float> m_trk_signed_d0;           
+  std::vector<float> m_trk_signed_z0sinTheta;   
+  std::vector<float> m_trk_signed_d0sig;        
+  std::vector<float> m_trk_signed_z0sinThetasig;
   std::vector<float> m_trk_eta;       
   std::vector<float> m_trk_theta;     
   std::vector<float> m_trk_phi;       
@@ -135,7 +172,14 @@ class RootEventWriter final : public TrackJetWriter {
   //the index of the jet the tracks belong to
   std::vector<int> m_trk_jet_idx;
   
+
+  //Tools
+
+  std::shared_ptr<Propagator> m_propagator;
+  std::shared_ptr<ImpactPointEstimator> m_ipEst;
   
+  Acts::GeometryContext gctx_;
+  Acts::MagneticFieldContext mctx_;
   
 };
 

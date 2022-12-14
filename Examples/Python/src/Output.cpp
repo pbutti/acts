@@ -301,8 +301,9 @@ void addOutput(Context& ctx) {
   ACTS_PYTHON_DECLARE_WRITER(
       ActsExamples::RootEventWriter, mex,
       "RootEventWriter", inputJets, inputTrackParameters,inputTrajectories,
+      recoVertices,
       inputProtoTracks,inputParticles,inputSimHits,
-      filePath,treeName,fileMode);
+      filePath,treeName,fileMode,field);
 
   // CSV WRITERS
   ACTS_PYTHON_DECLARE_WRITER(ActsExamples::CsvParticleWriter, mex,

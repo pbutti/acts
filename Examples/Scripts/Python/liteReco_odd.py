@@ -126,8 +126,10 @@ addVertexFitting(
 )
 
 addTrackJets(s,
+             field,
              input_Trajectories="filteredTrajectories",
              input_Particles="particles_input",
+             
              outputDirRoot=outputDir)
 
 s.run()

@@ -21,6 +21,9 @@
 #include "ActsExamples/Utilities/Range.hpp"
 #include "ActsExamples/Validation/TrackClassification.hpp"
 #include "ActsExamples/EventData/Trajectories.hpp"
+#include "Acts/Vertexing/Vertex.hpp"
+
+
 
 #include <ios>
 #include <iostream>
@@ -83,6 +86,38 @@ ActsExamples::RootEventWriter::RootEventWriter(
   } else {
 
     m_outputTree->Branch("event_nr", &m_eventNr);
+
+
+    // The Truth HS Vertex
+    
+    // The reco vertices
+    
+    m_outputTree->Branch("recovertex_x",&m_vtx_x);
+    m_outputTree->Branch("recovertex_y",&m_vtx_y);
+    m_outputTree->Branch("recovertex_z",&m_vtx_z);
+    m_outputTree->Branch("recovertex_t",&m_vtx_t);
+    m_outputTree->Branch("recovertex_sumPt2",&m_vtx_sumPt2);
+    m_outputTree->Branch("recovertex_isHS",&m_vtx_isHS);
+    m_outputTree->Branch("recovertex_isPU",&m_vtx_isPU);
+
+    /*
+    m_outputTree->Branch("recovertex_cov_xx",&m_vtx_cov_xx);
+    m_outputTree->Branch("recovertex_cov_xy",&m_vtx_cov_xy);
+    m_outputTree->Branch("recovertex_cov_xz",&m_vtx_cov_xz);
+    m_outputTree->Branch("recovertex_cov_xt",&m_vtx_cov_xt);
+    m_outputTree->Branch("recovertex_cov_yy",&m_vtx_cov_yy);
+    m_outputTree->Branch("recovertex_cov_yz",&m_vtx_cov_yz);
+    m_outputTree->Branch("recovertex_cov_yt",&m_vtx_cov_yt);
+    m_outputTree->Branch("recovertex_cov_zz",&m_vtx_cov_zz);
+    m_outputTree->Branch("recovertex_cov_zt",&m_vtx_cov_zt);
+    m_outputTree->Branch("recovertex_cov_tt",&m_vtx_cov_tt);
+    */
+    
+    
+    //m_outputTree->Branch("recovertex_tracks_idx",m_vtx_tracks_idx);
+    //m_outputTree->Branch("recovertex_tracks_weight",m_vtx_tracks_weight);
+    
+    
     
     // The jets
     m_outputTree->Branch("jet_pt",&m_jet_pt);
@@ -99,6 +134,10 @@ ActsExamples::RootEventWriter::RootEventWriter(
     m_outputTree->Branch("track_prob",       &m_tracks_prob);
     m_outputTree->Branch("track_d0",         &m_trk_d0);
     m_outputTree->Branch("track_z0",         &m_trk_z0);
+    m_outputTree->Branch("track_signedd0",             &m_trk_signed_d0);
+    m_outputTree->Branch("track_signedd0sig",          &m_trk_signed_d0sig);
+    m_outputTree->Branch("track_signedz0sinTheta",     &m_trk_signed_z0sinTheta);
+    m_outputTree->Branch("track_signedz0sinThetasig",  &m_trk_signed_z0sinThetasig);
     m_outputTree->Branch("track_eta",        &m_trk_eta);
     m_outputTree->Branch("track_theta",      &m_trk_theta);
     m_outputTree->Branch("track_phi",        &m_trk_phi);
@@ -147,6 +186,18 @@ ActsExamples::RootEventWriter::RootEventWriter(
     m_outputTree->Branch("truthMatched", &m_truthMatched);
     */
   }
+
+  //Setting up tools
+
+  //Propagator with void navigator
+  Acts::EigenStepper<> stepper(m_cfg.field);
+  m_propagator = std::make_shared<Propagator>(stepper);
+  
+  //Setting up the ImpactPointEstimator
+  ImpactPointEstimator::Config ipEstCfg(m_cfg.field, m_propagator);
+
+  m_ipEst = std::make_shared<ImpactPointEstimator> (ipEstCfg);
+    
 }
 
 ActsExamples::RootEventWriter::~RootEventWriter() {
@@ -191,6 +242,9 @@ ActsExamples::ProcessCode ActsExamples::RootEventWriter::writeT(
   
   const auto& inputTrajectories =
       ctx.eventStore.get<TrajectoriesContainer>(m_cfg.inputTrajectories);
+
+  const auto& reco_vertices =
+      ctx.eventStore.get<VertexContainer>(m_cfg.recoVertices);
   
   ACTS_INFO("RootWriter::Number of "<<m_cfg.inputTrajectories << " "<< inputTrajectories.size());
 
@@ -217,6 +271,63 @@ ActsExamples::ProcessCode ActsExamples::RootEventWriter::writeT(
   // Get the event number
   m_eventNr = ctx.eventNumber;
 
+
+  // Get the vertices
+
+  double maxSumPt2 = -1;
+  unsigned int HS_idx = 0;
+
+  //If there are 0 vertices in the event, skip the event
+  if (reco_vertices.size() < 1)
+    return ProcessCode::SUCCESS;
+  
+  for (size_t ivtx = 0; ivtx < reco_vertices.size(); ivtx++) {
+    
+    Acts::Vertex<Acts::BoundTrackParameters> recovtx = reco_vertices.at(ivtx);
+    
+    m_vtx_x.push_back(recovtx.position()[0]);
+    m_vtx_y.push_back(recovtx.position()[1]);
+    m_vtx_z.push_back(recovtx.position()[2]);
+    m_vtx_t.push_back(recovtx.time());
+    
+    const auto vtx_cov = recovtx.fullCovariance();
+    
+
+    //Tracks at the vertex.
+    //I will use the fittedParameters
+    
+    const auto vtxtracks = recovtx.tracks();
+    
+    double sumPt2 = 0.;
+    for (auto& vtrk : vtxtracks) {
+      sumPt2+=vtrk.fittedParams.transverseMomentum() * vtrk.fittedParams.transverseMomentum();
+      //sumPt2+=vtrk.originalParams.transverseMomentum() * vtrk.originalParams.transverseMomentum();
+    }
+    
+    //Store the vtx index with the maximum sumpt2
+    if (sumPt2 > maxSumPt2) {
+      maxSumPt2 = sumPt2;
+      HS_idx = ivtx;
+    }
+
+    m_vtx_sumPt2.push_back(sumPt2);
+        
+  }
+
+  //Unfortunately I need to make the loop on the vertices twice to assign the flag if the vertex is PU or HS
+  
+  for (size_t ivtx = 0; ivtx < reco_vertices.size(); ivtx++) {
+    
+    if (ivtx == HS_idx) {
+      m_vtx_isHS.push_back(1);
+      m_vtx_isPU.push_back(0);
+    } else {
+      m_vtx_isHS.push_back(0);
+      m_vtx_isPU.push_back(1);
+    }
+    
+  }
+    
   for (size_t ijets = 0; ijets < jets.size(); ++ijets) {
     Acts::Vector4 jet_4mom = jets[ijets].getFourMomentum();
 
@@ -231,19 +342,72 @@ ActsExamples::ProcessCode ActsExamples::RootEventWriter::writeT(
     m_jet_tracks_idx.push_back(jets[ijets].getTracks());
     
     m_jet_label.push_back(static_cast<int>(jets[ijets].getLabel()));
-
-
+    
   } // jets
   
-  //Get all the tracks 
-  for (auto& trk_params : tracks) { 
-    
-    const auto params  = trk_params.parameters();
 
-    if (!trk_params.covariance().has_value())
-      throw std::runtime_error("Track is missing covariance matrix");
+  //Loop on the tracks
+  for (size_t itrk = 0; itrk<tracks.size(); itrk++) {
+
+    double signed_d0             = -9999;
+    double signed_z0SinTheta     = -9999;
+    double signed_d0_err         = 1.;
+    double signed_z0SinTheta_err = 1.;
+
+    const auto trk_params = tracks[itrk];
+    const auto params     = trk_params.parameters();
+    const auto cov        = *(trk_params.covariance());
     
-    const auto& cov    = *trk_params.covariance();
+
+    //Check if this track belongs to a jet and compute the IPs
+    for (size_t ijet = 0; ijet<jets.size(); ++ijet) {
+      std::vector<int> jtrks = jets[ijet].getTracks();
+      
+      if (std::find(jtrks.begin(), jtrks.end(),itrk) != jtrks.end()) {
+
+        Acts::Vector3 jetDir{jets[ijet].getFourMomentum()[0],
+          jets[ijet].getFourMomentum()[1],
+          jets[ijet].getFourMomentum()[2]};
+        
+        
+        Acts::Result<Acts::ImpactParametersAndSigma> ipAndSigma = m_ipEst->estimateImpactParameters(tracks[itrk], reco_vertices[HS_idx],
+                                                                                                    gctx_, mctx_);
+        
+        Acts::Result<std::pair<double,double>> vszs = m_ipEst->getLifetimesSignOfTrack(tracks[itrk], reco_vertices[HS_idx],
+                                                                                       jetDir, gctx_, mctx_);
+        
+        if (!ipAndSigma.ok() || !vszs.ok())
+          continue;
+
+        //This is not unbiased!
+        signed_d0             = std::fabs((*ipAndSigma).IPd0)  * (*vszs).first;
+        signed_z0SinTheta     = std::fabs((*ipAndSigma).IPz0SinTheta) * (*vszs).second;
+        signed_d0_err         = (*ipAndSigma).sigmad0;
+        signed_z0SinTheta_err = (*ipAndSigma).sigmaz0SinTheta;
+
+        if (m_jet_label[ijet]!=5)
+          continue;
+
+        ACTS_DEBUG("jet direction ("<<jetDir[0]<<","<<jetDir[1]<<","<<jetDir[2]);
+        ACTS_DEBUG("vtx pox ("<<reco_vertices[HS_idx].position()[0]<<","<<reco_vertices[HS_idx].position()[1]<<","<<reco_vertices[HS_idx].position()[2]);
+        ACTS_DEBUG("track d0="<< params[Acts::eBoundLoc0]<<"  extr do="<<(*ipAndSigma).IPd0);
+        ACTS_DEBUG("track phi="<< params[Acts::eBoundPhi]);
+
+        double d0 = params[Acts::eBoundLoc0];
+        double phi = params[Acts::eBoundPhi];
+
+        double vs      = std::sin(std::atan2(jetDir[0], jetDir[1]) - phi) * d0;
+
+        ACTS_DEBUG("vs = "<<vs);
+        
+      }//track in jet
+    }//loop on jets
+
+    
+    
+    
+    if (!trk_params.covariance().has_value())
+      continue;
     
     float trk_theta = params[Acts::eBoundTheta];
     float trk_eta   = std::atanh(std::cos(trk_theta));
@@ -253,7 +417,13 @@ ActsExamples::ProcessCode ActsExamples::RootEventWriter::writeT(
     
     m_tracks_prob.push_back(1.);   // todo
     m_trk_d0.push_back(params[Acts::eBoundLoc0]);             
-    m_trk_z0.push_back(params[Acts::eBoundLoc1]);             
+    m_trk_z0.push_back(params[Acts::eBoundLoc1]);
+    
+    m_trk_signed_d0.push_back(signed_d0);
+    m_trk_signed_d0sig.push_back(signed_d0 / signed_d0_err);
+    m_trk_signed_z0sinTheta.push_back(signed_z0SinTheta);
+    m_trk_signed_z0sinThetasig.push_back(signed_z0SinTheta / signed_z0SinTheta_err);
+    
     m_trk_eta.push_back(trk_eta);            
     m_trk_theta.push_back(trk_theta);          
     m_trk_phi.push_back(params[Acts::eBoundPhi]);            
@@ -266,6 +436,10 @@ ActsExamples::ProcessCode ActsExamples::RootEventWriter::writeT(
     m_trk_t120.push_back(1.);           //todo
     m_trk_t180.push_back(1.);           //todo
     m_trk_z.push_back(1.);              //todo
+
+    //This give un-initialized warnings
+    
+    /*
     m_trk_var_d0.push_back(cov(Acts::eBoundLoc0,Acts::eBoundLoc0));         
     m_trk_var_z0.push_back(cov(Acts::eBoundLoc1,Acts::eBoundLoc1));         
     m_trk_var_phi.push_back(cov(Acts::eBoundPhi,Acts::eBoundPhi));        
@@ -281,7 +455,7 @@ ActsExamples::ProcessCode ActsExamples::RootEventWriter::writeT(
     m_trk_cov_phitheta.push_back(cov(Acts::eBoundPhi,Acts::eBoundTheta));   
     m_trk_cov_phiqOverP.push_back(cov(Acts::eBoundPhi,Acts::eBoundQOverP));  
     m_trk_cov_thetaqOverP.push_back(cov(Acts::eBoundTheta,Acts::eBoundQOverP));
-    
+    */
   } //Tracks
   
   
@@ -294,6 +468,15 @@ ActsExamples::ProcessCode ActsExamples::RootEventWriter::writeT(
 
 void ActsExamples::RootEventWriter::Clear() {
 
+  //Vertices
+  m_vtx_x.clear();
+  m_vtx_y.clear();
+  m_vtx_z.clear();
+  m_vtx_t.clear();
+  m_vtx_sumPt2.clear();
+  m_vtx_isHS.clear();
+  m_vtx_isPU.clear();
+  
   //Jets
   m_jet_pt.clear();
   m_jet_eta.clear();
@@ -308,7 +491,11 @@ void ActsExamples::RootEventWriter::Clear() {
   //Tracks
   m_tracks_prob.clear();        
   m_trk_d0.clear();             
-  m_trk_z0.clear();             
+  m_trk_z0.clear();
+  m_trk_signed_d0.clear();
+  m_trk_signed_d0sig.clear();
+  m_trk_signed_z0sinTheta.clear();
+  m_trk_signed_z0sinThetasig.clear();
   m_trk_eta.clear();            
   m_trk_theta.clear();          
   m_trk_phi.clear();            

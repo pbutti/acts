@@ -25,7 +25,7 @@ from acts.examples.reconstruction import (
 from common import getOpenDataDetectorDirectory
 from acts.examples.odd import getOpenDataDetector
 
-ttbar_pu200 = True
+ttbar_pu200 = False
 u = acts.UnitConstants
 geoDir = getOpenDataDetectorDirectory()
 outputDir = pathlib.Path.cwd() / "odd_output"
@@ -42,7 +42,7 @@ detector, trackingGeometry, decorators = getOpenDataDetector(
 field = acts.ConstantBField(acts.Vector3(0.0, 0.0, 2.0 * u.T))
 rnd = acts.examples.RandomNumbers(seed=42)
 
-s = acts.examples.Sequencer(events=1000, numThreads=-1, outputDir=str(outputDir))
+s = acts.examples.Sequencer(events=5000, numThreads=-1, outputDir=str(outputDir))
 
 if not ttbar_pu200:
     addParticleGun(
@@ -86,7 +86,7 @@ addDigitization(
     trackingGeometry,
     field,
     digiConfigFile=oddDigiConfig,
-    #outputDirRoot=outputDir,
+    outputDirRoot=outputDir,
     rnd=rnd,
 )
 
@@ -98,7 +98,7 @@ addSeeding(
     if ttbar_pu200
     else TruthSeedRanges(),
     geoSelectionConfigFile=oddSeedingSel,
-    #outputDirRoot=outputDir,
+    outputDirRoot=outputDir,
 )
 
 addCKFTracks(
@@ -107,7 +107,7 @@ addCKFTracks(
     field,
     CKFPerformanceConfig(ptMin=1.0 * u.GeV if ttbar_pu200 else 0.0, nMeasurementsMin=6),
     TrackSelectorRanges(pt=(1.0 * u.GeV, None), absEta=(None, 3.0), removeNeutral=True),
-    #outputDirRoot=outputDir,
+    outputDirRoot=outputDir,
 )
 
 addAmbiguityResolution(
@@ -121,13 +121,15 @@ addVertexFitting(
     s,
     field,
     vertexFinder=VertexFinder.Iterative,
-    #outputDirRoot=outputDir,
+    outputDirRoot=outputDir,
     trajectories="filteredTrajectories"  #trajectories out of the ambi-solver
 )
 
 addTrackJets(s,
+             field,
              input_Trajectories="filteredTrajectories",
              input_Particles="particles_input",
+             
              outputDirRoot=outputDir)
 
 s.run()

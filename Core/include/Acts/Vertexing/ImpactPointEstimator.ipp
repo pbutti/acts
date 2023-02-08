@@ -374,7 +374,7 @@ getLifetimesSignOfTrack(
   // Create propagator options
   auto logger = getDefaultLogger("IPEstProp",Logging::INFO);
   propagator_options_t pOptions(gctx, mctx, LoggerWrapper{*logger});
-  pOptions.directon = NavigationDirection::Backward;
+  pOptions.direction = NavigationDirection::Backward;
  
   // Do the propagation to the perigeee
   auto result = m_cfg.propagator->propagate(track, *perigeeSurface, pOptions);
@@ -390,7 +390,7 @@ getLifetimesSignOfTrack(
   const double phi   = params[BoundIndices::eBoundPhi];
   const double theta = params[BoundIndices::eBoundTheta];
   
-  double vs      = std::sin(std::atan2(direction[0],direction[1]) - phi) * d0;
+  double vs      = std::sin(std::atan2(direction[1],direction[0]) - phi) * d0;
   double eta     = -std::log(std::tan(theta/2.));
   double dir_eta = VectorHelpers::eta(direction);
   
@@ -403,5 +403,41 @@ getLifetimesSignOfTrack(
 
   return vszs;
     
+}
+
+template <typename input_track_t, typename propagator_t,
+          typename propagator_options_t>
+Acts::Result<double>
+Acts::ImpactPointEstimator<input_track_t, propagator_t, propagator_options_t>::
+get3DLifetimeSignOfTrack(
+      const BoundTrackParameters& track, const Vertex<input_track_t>& vtx,
+      const Acts::Vector3& direction,
+      const GeometryContext& gctx, const MagneticFieldContext& mctx) const {
+
+  
+  const std::shared_ptr<PerigeeSurface> perigeeSurface =
+      Surface::makeShared<PerigeeSurface>(vtx.position());
+  
+  // Create propagator options
+  auto logger = getDefaultLogger("IPEstProp",Logging::INFO);
+  propagator_options_t pOptions(gctx, mctx, LoggerWrapper{*logger});
+  pOptions.direction = NavigationDirection::Backward;
+  
+  // Do the propagation to the perigeee
+  auto result = m_cfg.propagator->propagate(track, *perigeeSurface, pOptions);
+  
+  if (!result.ok()) {
+    return result.error();
+  }
+  
+  const auto& propRes  = *result;
+  const auto& params   = propRes.endParameters->parameters();
+  const Vector3 trkpos = params->momentum();
+  const Vector3 trkmom = params->position();
+  
+  double sign = direction.cross(trkmom).dot(trkmom.cross(vtx.position() - trkpos));
+  
+  return sign >=  0. ? 1. : -1.;
+  
 }
 

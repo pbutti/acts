@@ -110,14 +110,12 @@ ActsExamples::ProcessCode ActsExamples::AlignmentAlgorithm::execute(
   // Set the KalmanFitter options
   TrackFitterOptions kfOptions(ctx.geoContext, ctx.magFieldContext,
                                ctx.calibContext, extensions,
-                               Acts::LoggerWrapper{logger()},
                                Acts::PropagatorPlainOptions(), &(*pSurface));
 
   // Set the alignment options
   ActsAlignment::AlignmentOptions<TrackFitterOptions> alignOptions(
-      kfOptions, m_cfg.alignedTransformUpdater, Acts::LoggerWrapper{logger()},
-      m_cfg.alignedDetElements, m_cfg.chi2ONdfCutOff, m_cfg.deltaChi2ONdfCutOff,
-      m_cfg.maxNumIterations);
+      kfOptions, m_cfg.alignedTransformUpdater, m_cfg.alignedDetElements,
+      m_cfg.chi2ONdfCutOff, m_cfg.deltaChi2ONdfCutOff, m_cfg.maxNumIterations);
 
   ACTS_DEBUG("Invoke track-based alignment with " << numTracksUsed
                                                   << " input tracks");

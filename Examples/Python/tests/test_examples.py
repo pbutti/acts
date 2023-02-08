@@ -11,6 +11,7 @@ from helpers import (
     rootEnabled,
     dd4hepEnabled,
     hepmc3Enabled,
+    pythia8Enabled,
     AssertCollectionExistsAlg,
     isCI,
     doHashChecks,
@@ -65,6 +66,7 @@ def assert_entries(root_file, tree_name, exp):
 
 
 @pytest.mark.slow
+@pytest.mark.skipif(not pythia8Enabled, reason="Pythia8 not set up")
 def test_pythia8(tmp_path, seq, assert_root_hash):
     from pythia8 import runPythia8
 
@@ -688,6 +690,7 @@ def test_material_mapping(material_recording, tmp_path, assert_root_hash):
         decorators,
         outputDir=str(tmp_path),
         inputDir=material_recording,
+        mappingStep=1,
         s=s,
     )
 
@@ -767,6 +770,7 @@ def test_volume_material_mapping(material_recording, tmp_path, assert_root_hash)
         mapName="material-map-volume",
         outputDir=str(tmp_path),
         inputDir=material_recording,
+        mappingStep=1,
         s=s,
     )
 
@@ -1091,6 +1095,7 @@ def test_ckf_tracks_example(
 
 
 @pytest.mark.skipif(not dd4hepEnabled, reason="DD4hep not set up")
+@pytest.mark.skipif(not pythia8Enabled, reason="Pythia8 not set up")
 @pytest.mark.slow
 @pytest.mark.filterwarnings("ignore::UserWarning")
 def test_vertex_fitting(tmp_path):

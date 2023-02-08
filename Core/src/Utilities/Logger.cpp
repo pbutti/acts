@@ -12,14 +12,6 @@
 
 namespace Acts {
 
-LoggerWrapper::LoggerWrapper(const Logger& logger) : m_logger(&logger) {}
-
-void LoggerWrapper::log(const Logging::Level& lvl,
-                        const std::string& input) const {
-  assert(m_logger != nullptr);
-  return m_logger->log(lvl, input);
-}
-
 namespace Logging {
 
 #if defined(ACTS_ENABLE_LOG_FAILURE_THRESHOLD) and \
@@ -116,11 +108,10 @@ std::unique_ptr<const Logger> getDefaultLogger(const std::string& name,
   return std::make_unique<const Logger>(std::move(output), std::move(print));
 }
 
-LoggerWrapper getDummyLogger() {
+const Logger& getDummyLogger() {
   static const std::unique_ptr<const Logger> logger =
       Logging::makeDummyLogger();
-  static const LoggerWrapper loggerWrapper{*logger};
 
-  return loggerWrapper;
+  return *logger;
 }
 }  // namespace Acts

@@ -28,6 +28,7 @@ add_library(
   src/RootBFieldWriter.cpp
   src/RootEventWriter.cpp
   src/EventDict.cxx
+  src/RootAthenaNTupleReader.cpp
 )
 target_include_directories(
   ActsExamplesIoRoot

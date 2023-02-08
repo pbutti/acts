@@ -8,14 +8,17 @@
 
 #include "ActsExamples/Framework/Sequencer.hpp"
 
+#include "Acts/Utilities/Helpers.hpp"
 #include "ActsExamples/Framework/ProcessCode.hpp"
 #include "ActsExamples/Framework/WhiteBoard.hpp"
 #include "ActsExamples/Utilities/Paths.hpp"
 
 #include <algorithm>
 #include <atomic>
+#include <cfenv>
 #include <chrono>
 #include <exception>
+#include <limits>
 #include <numeric>
 #include <stdexcept>
 
@@ -406,8 +409,11 @@ int ActsExamples::Sequencer::run() {
     ACTS_DEBUG("  " << names[i] << ": "
                     << perEvent(clocksAlgorithms[i], numEvents));
   }
-  storeTiming(names, clocksAlgorithms, numEvents,
-              joinPaths(m_cfg.outputDir, m_cfg.outputTimingFile));
+
+  if (!m_cfg.outputDir.empty()) {
+    storeTiming(names, clocksAlgorithms, numEvents,
+                joinPaths(m_cfg.outputDir, m_cfg.outputTimingFile));
+  }
 
   return EXIT_SUCCESS;
 }

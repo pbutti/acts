@@ -330,8 +330,8 @@ ActsExamples::ProcessCode ActsExamples::RootEventWriter::writeT(
     
   for (size_t ijets = 0; ijets < jets.size(); ++ijets) {
     Acts::Vector4 jet_4mom = jets[ijets].getFourMomentum();
-
-    float jet_theta = theta(jet_4mom);
+    Acts::Vector3 jet_3mom{jet_4mom[0],jet_4mom[1],jet_4mom[2]};
+    float jet_theta = theta(jet_3mom);
     m_jet_pt.push_back(perp(jet_4mom));
     //m_jet_eta.push_back(jets[ijets].eta());
     m_jet_eta.push_back(std::atanh(std::cos(jet_theta)));

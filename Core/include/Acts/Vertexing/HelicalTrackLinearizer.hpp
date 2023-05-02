@@ -82,6 +82,11 @@ class HelicalTrackLinearizer {
     double minQoP = 1e-15;
     // Maximum curvature value
     double maxRho = 1e+15;
+    // Switch on time propagation in the vertex position jacobian
+    bool TimeAndPosFit = false;
+
+    bool verbose = false;
+    
   };
 
   /// @brief Constructor

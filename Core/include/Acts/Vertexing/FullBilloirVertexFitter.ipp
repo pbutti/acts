@@ -12,6 +12,8 @@
 #include "Acts/Vertexing/TrackAtVertex.hpp"
 #include "Acts/Vertexing/VertexingError.hpp"
 
+#include <iostream>
+
 namespace {
 
 /// @struct BilloirTrack
@@ -100,16 +102,18 @@ Acts::FullBilloirVertexFitter<input_track_t, linearizer_t>::fit(
 
     BilloirVertex billoirVertex;
     int iTrack = 0;
-    // iterate over all tracks
+    // iterate over all tracks   
     for (const input_track_t* trackContainer : paramVector) {
       const auto& trackParams = extractParameters(*trackContainer);
+            
       if (nIter == 0) {
         double phi = trackParams.parameters()[BoundIndices::eBoundPhi];
         double theta = trackParams.parameters()[BoundIndices::eBoundTheta];
         double qop = trackParams.parameters()[BoundIndices::eBoundQOverP];
         trackMomenta.push_back(Vector3(phi, theta, qop));
+        
       }
-
+              
       auto result = linearizer.linearizeTrack(
           trackParams, linPoint, vertexingOptions.geoContext,
           vertexingOptions.magFieldContext, state.linearizerState);
@@ -122,7 +126,10 @@ Acts::FullBilloirVertexFitter<input_track_t, linearizer_t>::fit(
         double theta = parametersAtPCA[BoundIndices::eBoundTheta];
         double qOverP = parametersAtPCA[BoundIndices::eBoundQOverP];
 
-        // calculate f(V_0,p_0)  f_d0 = f_z0 = 0
+        //PF::Add Timing
+        double t0 = parametersAtPCA[BoundIndices::eBoundTime];
+        
+        // calculate f(V_0,p_0)  f_d0 = f_z0 = f_t0 = 0
         double fPhi = trackMomenta[iTrack][0];
         double fTheta = trackMomenta[iTrack][1];
         double fQOvP = trackMomenta[iTrack][2];
@@ -130,12 +137,12 @@ Acts::FullBilloirVertexFitter<input_track_t, linearizer_t>::fit(
                                                         linTrack);
 
         currentBilloirTrack.deltaQ << d0, z0, phi - fPhi, theta - fTheta,
-            qOverP - fQOvP, 0;
+            qOverP - fQOvP, t0;
 
         // position jacobian (D matrix)
         ActsMatrix<eBoundSize, 4> Dmat;
         Dmat = linTrack.positionJacobian;
-
+        
         // momentum jacobian (E matrix)
         ActsMatrix<eBoundSize, 3> Emat;
         Emat = linTrack.momentumJacobian;
@@ -187,6 +194,7 @@ Acts::FullBilloirVertexFitter<input_track_t, linearizer_t>::fit(
     // beam-const
     // Vdel = Tvec-sum{BiMat*Ci^-1*UiVec}
     Vector4 Vdel = billoirVertex.Tvec - billoirVertex.BCUvec;
+
     SymMatrix4 VwgtMat =
         billoirVertex.Amat -
         billoirVertex.BCBmat;  // VwgtMat = Amat-sum{BiMat*Ci^-1*BiMat^T}
@@ -202,8 +210,11 @@ Acts::FullBilloirVertexFitter<input_track_t, linearizer_t>::fit(
 
     // cov(deltaV) = VwgtMat^-1
     SymMatrix4 covDeltaVmat = VwgtMat.inverse();
+
     // deltaV = cov_(deltaV) * Vdel;
     Vector4 deltaV = covDeltaVmat * Vdel;
+
+    
     //--------------------------------------------------------------------------------------
     // start momentum related calculations
 
@@ -216,7 +227,7 @@ Acts::FullBilloirVertexFitter<input_track_t, linearizer_t>::fit(
 
       // update track momenta
       trackMomenta[iTrack] += deltaP;
-
+      
       // correct for 2PI / PI periodicity
       const auto correctedPhiTheta = detail::normalizePhiTheta(
           trackMomenta[iTrack][0], trackMomenta[iTrack][1]);
@@ -294,6 +305,7 @@ Acts::FullBilloirVertexFitter<input_track_t, linearizer_t>::fit(
 
     // assign new linearization point (= new vertex position in global frame)
     linPoint += deltaV;
+    
     if (newChi2 < chi2) {
       chi2 = newChi2;
 
@@ -321,6 +333,9 @@ Acts::FullBilloirVertexFitter<input_track_t, linearizer_t>::fit(
         TrackAtVertex<input_track_t> trackVx(bTrack.chi2, refittedParams,
                                              bTrack.originalTrack);
         tracksAtVertex.push_back(std::move(trackVx));
+
+        //PF:: ALSO UPDATE THE TIME!!
+        
         ++iTrack;
       }
       fittedVertex.setTracksAtVertex(tracksAtVertex);

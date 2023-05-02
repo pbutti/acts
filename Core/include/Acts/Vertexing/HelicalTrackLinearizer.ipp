@@ -7,6 +7,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include "Acts/Surfaces/PerigeeSurface.hpp"
+#include <iostream>
 
 template <typename propagator_t, typename propagator_options_t>
 Acts::Result<Acts::LinearizedTrack> Acts::
@@ -36,14 +37,32 @@ Acts::Result<Acts::LinearizedTrack> Acts::
 
   const auto& endParams = *result->endParameters;
 
+  //These are the parameters propagated at the linearization point from the original track
   BoundVector paramsAtPCA = endParams.parameters();
+  //The track time reference
+  double ref_time_point = 0.; 
+  //I need to correct the time to be the time relative to the new perigee
+  
+  paramsAtPCA[eBoundTime] = endParams.time() + ref_time_point - linPoint[eTime];
+  
+  if (m_cfg.verbose) {
+    std::cout<<"PARAMS AT PCA (LIN POINT)"<<std::endl;
+    std::cout<<"\n"<<paramsAtPCA<<std::endl;
+    std::cout<<"ADDING TIME"<<std::endl;
+    std::cout<<"\n"<<paramsAtPCA<<std::endl;
+  }
+  
   Vector4 positionAtPCA = Vector4::Zero();
   {
     auto pos = endParams.position(gctx);
     positionAtPCA[ePos0] = pos[ePos0];
     positionAtPCA[ePos1] = pos[ePos1];
     positionAtPCA[ePos2] = pos[ePos2];
-    positionAtPCA[eTime] = endParams.time();
+
+    //The time in global frame
+    positionAtPCA[eTime] = endParams.time() + ref_time_point;
+    //positionAtPCA[eTime] = endParams.time() - linPoint[eTime];
+    
   }
   BoundSymMatrix parCovarianceAtPCA = endParams.covariance().value();
 
@@ -54,9 +73,22 @@ Acts::Result<Acts::LinearizedTrack> Acts::
     positionAtPCA[ePos0] = pos[ePos0];
     positionAtPCA[ePos1] = pos[ePos1];
     positionAtPCA[ePos2] = pos[ePos2];
+    //Add timing
+    //positionAtPCA[eTime] = params.time() - linPoint[eTime];
+
+    //The time in global frame
+    positionAtPCA[eTime] = params.time() + ref_time_point;
     parCovarianceAtPCA = params.covariance().value();
   }
 
+  if (m_cfg.verbose) {
+    std::cout<<"PF::PositionAtPCA - Linearizer"<<std::endl;
+    std::cout<<positionAtPCA<<std::endl;
+    std::cout<<"Parameter covariance at PCA"<<std::endl;
+    std::cout<<parCovarianceAtPCA<<std::endl;
+  }
+  
+  
   // phiV and functions
   double phiV = paramsAtPCA(BoundIndices::eBoundPhi);
   double sinPhiV = std::sin(phiV);
@@ -119,8 +151,29 @@ Acts::Result<Acts::LinearizedTrack> Acts::
   predParamsAtPCA[2] = phiAtPCA;
   predParamsAtPCA[3] = th;
   predParamsAtPCA[4] = qOvP;
-  predParamsAtPCA[5] = 0.;
+  //predParamsAtPCA[5] = 0.;
+  
+  //Adding timing to the predicted parameters
+  
+  //The sign of the DeltaT is positive if the track has to move in the
+  //forward direction in order to reach the new point.
+  
+  //int sgnt = intersection.intersection.pathLength >= 0 ? 1 : -1;
+  ActsScalar pInGeV = std::abs(1.0 / qOvP);
+  ActsScalar massInGeV = 0.1; //in GeV - pion
+  ActsScalar beta = pInGeV / std::hypot(pInGeV, massInGeV);
 
+  double extrap_term = 0.;
+
+  //If we neglect correlation between vtx position and vtx time
+  //we should get the weighted avg.
+  //DeltaPhi = phi_p - phi_V
+  if (m_cfg.TimeAndPosFit)
+    extrap_term = -rho * (phiAtPCA - phiV) / (beta * sinTh);
+  
+  predParamsAtPCA[5] = positionAtPCA[eTime] - linPoint[eTime] + extrap_term;
+
+  
   // Fill position jacobian (D_k matrix), Eq. 5.36 in Ref(1)
   ActsMatrix<eBoundSize, 4> positionJacobian;
   positionJacobian.setZero();
@@ -129,6 +182,7 @@ Acts::Result<Acts::LinearizedTrack> Acts::
   positionJacobian(0, 1) = -sgnH * Y / S;
 
   const double S2tanTh = S2 * tanTh;
+  const double S2sinTh = S2 * sinTh;
 
   // Second row
   positionJacobian(1, 0) = rho * Y / S2tanTh;
@@ -139,9 +193,22 @@ Acts::Result<Acts::LinearizedTrack> Acts::
   positionJacobian(2, 0) = -Y / S2;
   positionJacobian(2, 1) = X / S2;
 
-  // TODO: include timing in track linearization
-  // Last row
-  positionJacobian(5, 3) = 1;
+  
+  //x Last row
+
+  if (m_cfg.TimeAndPosFit) {
+
+    if (m_cfg.verbose) {
+      std::cout<<"dz0/dXV="<<rho * Y / S2tanTh<<std::endl;
+      std::cout<<"beta="<<beta<<std::endl;
+      std::cout<<"S2tanTh="<<S2tanTh<<std::endl;
+      std::cout<<"S2sinTh="<<S2sinTh<<std::endl;
+    }
+    
+    positionJacobian(5, 0) = (rho / beta) * Y / S2sinTh;
+    positionJacobian(5, 1) = (-rho / beta) * X / S2sinTh;
+  }
+  positionJacobian(5, 3) = 1.;
 
   // Fill momentum jacobian (E_k matrix), Eq. 5.37 in Ref(1)
   ActsMatrix<eBoundSize, 3> momentumJacobian;
@@ -176,14 +243,17 @@ Acts::Result<Acts::LinearizedTrack> Acts::
   momentumJacobian(4, 2) = 1.;
 
   // const term F(V_0, p_0) in Talyor expansion
+  // F(V_0,p_0) = F(V,p) - D * dV - E * dP
+  
   BoundVector constTerm = predParamsAtPCA - positionJacobian * positionAtPCA -
                           momentumJacobian * momentumAtPCA;
 
   // The parameter weight
-  ActsSymMatrix<5> parWeight = (parCovarianceAtPCA.block<5, 5>(0, 0)).inverse();
+  //ActsSymMatrix<5> parWeight = (parCovarianceAtPCA.block<5, 5>(0, 0)).inverse();
+  //BoundSymMatrix weightAtPCA{BoundSymMatrix::Identity()};
+  //weightAtPCA.block<5, 5>(0, 0) = parWeight;
 
-  BoundSymMatrix weightAtPCA{BoundSymMatrix::Identity()};
-  weightAtPCA.block<5, 5>(0, 0) = parWeight;
+  BoundSymMatrix weightAtPCA = parCovarianceAtPCA.inverse();
 
   return LinearizedTrack(paramsAtPCA, parCovarianceAtPCA, weightAtPCA, linPoint,
                          positionJacobian, momentumJacobian, positionAtPCA,

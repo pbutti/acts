@@ -2,11 +2,14 @@ include(ActsTargetLinkLibrariesSystem)
 
 add_library(
   ActsExamplesFramework SHARED
-  src/Framework/BareAlgorithm.cpp
+  src/EventData/MeasurementCalibration.cpp
+  src/EventData/ScalingCalibrator.cpp
+  src/Framework/IAlgorithm.cpp
+  src/Framework/SequenceElement.cpp
   src/Framework/WhiteBoard.cpp
-  src/Framework/BareService.cpp
   src/Framework/RandomNumbers.cpp
   src/Framework/Sequencer.cpp
+  src/Utilities/EventDataTransforms.cpp
   src/Utilities/Paths.cpp
   src/Utilities/Options.cpp
   src/Utilities/Helpers.cpp
@@ -22,7 +25,7 @@ target_include_directories(
   PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 target_link_libraries(
   ActsExamplesFramework
-  PUBLIC ActsCore ActsFatras Boost::boost ROOT::Core ROOT::Hist
+  PUBLIC ActsCore ActsFatras ActsPluginFpeMonitoring Boost::boost ROOT::Core ROOT::Hist
   PRIVATE std::filesystem)
 acts_target_link_libraries_system(
   ActsExamplesFramework
@@ -30,14 +33,10 @@ acts_target_link_libraries_system(
 target_compile_definitions(
   ActsExamplesFramework
   PRIVATE BOOST_FILESYSTEM_NO_DEPRECATED)
-# set per-target c++17 requirement that will be propagated to linked targets
-target_compile_features(
-  ActsExamplesFramework
-  PUBLIC cxx_std_17)
 
 if(ACTS_USE_EXAMPLES_TBB)
-  # newer DD4hep version require TBB and search interally for TBB in
-  # config-only mode. to avoid mismatches we explicitely search using
+  # newer DD4hep version require TBB and search internally for TBB in
+  # config-only mode. to avoid mismatches we explicitly search using
   # config-only mode first to be sure that we find the same version.
   find_package(TBB ${_acts_tbb_version} CONFIG)
   if(NOT TBB_FOUND)

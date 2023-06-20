@@ -16,7 +16,9 @@
 
 #include <array>
 #include <cmath>
+#include <cstddef>
 #include <limits>
+#include <optional>
 
 namespace ActsExamples {
 
@@ -55,6 +57,11 @@ class ParametricParticleGenerator : public EventGenerator::ParticlesGenerator {
     bool randomizeCharge = false;
     /// Number of particles.
     size_t numParticles = 1;
+
+    /// Overrides particle charge.
+    std::optional<double> charge;
+    /// Overrides particle mass.
+    std::optional<double> mass;
   };
 
   ParametricParticleGenerator(const Config& cfg);

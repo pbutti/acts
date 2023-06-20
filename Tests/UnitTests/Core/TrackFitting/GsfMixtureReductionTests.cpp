@@ -8,7 +8,19 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include "Acts/Definitions/Algebra.hpp"
+#include "Acts/Definitions/TrackParametrization.hpp"
+#include "Acts/Definitions/Units.hpp"
 #include "Acts/TrackFitting/detail/KLMixtureReduction.hpp"
+
+#include <algorithm>
+#include <array>
+#include <cstddef>
+#include <memory>
+#include <numeric>
+#include <tuple>
+#include <utility>
+#include <vector>
 
 using namespace Acts;
 using namespace Acts::UnitLiterals;
@@ -16,7 +28,7 @@ using namespace Acts::UnitLiterals;
 struct DummyComponent {
   double weight = 0.0;
   BoundVector boundPars = BoundVector::Zero();
-  std::optional<BoundSymMatrix> boundCov = BoundSymMatrix::Identity();
+  BoundSymMatrix boundCov = BoundSymMatrix::Identity();
 };
 
 BOOST_AUTO_TEST_CASE(test_distance_matrix_min_distance) {

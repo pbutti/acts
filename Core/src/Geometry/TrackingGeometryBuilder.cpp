@@ -9,15 +9,21 @@
 #include "Acts/Geometry/TrackingGeometryBuilder.hpp"
 
 #include "Acts/Geometry/TrackingGeometry.hpp"
-#include "Acts/Geometry/TrackingVolume.hpp"
 
 #include <functional>
+#include <stdexcept>
+#include <utility>
 
 Acts::TrackingGeometryBuilder::TrackingGeometryBuilder(
     const Acts::TrackingGeometryBuilder::Config& cgbConfig,
     std::unique_ptr<const Logger> logger)
     : m_cfg(), m_logger(std::move(logger)) {
   setConfiguration(cgbConfig);
+}
+
+const Acts::TrackingGeometryBuilder::Config&
+Acts::TrackingGeometryBuilder::getConfiguration() const {
+  return m_cfg;
 }
 
 void Acts::TrackingGeometryBuilder::setConfiguration(

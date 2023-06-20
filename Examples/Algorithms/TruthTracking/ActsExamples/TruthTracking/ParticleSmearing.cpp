@@ -8,32 +8,45 @@
 
 #include "ActsExamples/TruthTracking/ParticleSmearing.hpp"
 
-#include "Acts/EventData/TrackParameters.hpp"
+#include "Acts/Definitions/Algebra.hpp"
+#include "Acts/Definitions/TrackParametrization.hpp"
 #include "Acts/Surfaces/PerigeeSurface.hpp"
+#include "Acts/Surfaces/Surface.hpp"
+#include "Acts/Utilities/Helpers.hpp"
 #include "Acts/Utilities/detail/periodic.hpp"
 #include "ActsExamples/EventData/SimParticle.hpp"
 #include "ActsExamples/EventData/Track.hpp"
-#include "ActsExamples/Framework/WhiteBoard.hpp"
+#include "ActsExamples/Framework/AlgorithmContext.hpp"
+#include "ActsExamples/Framework/RandomNumbers.hpp"
+#include "ActsExamples/Utilities/GroupBy.hpp"
+#include "ActsExamples/Utilities/Range.hpp"
+#include "ActsFatras/EventData/Particle.hpp"
 
+#include <algorithm>
 #include <cmath>
-#include <vector>
+#include <ostream>
+#include <random>
+#include <stdexcept>
+#include <utility>
 
 ActsExamples::ParticleSmearing::ParticleSmearing(const Config& config,
                                                  Acts::Logging::Level level)
-    : BareAlgorithm("ParticleSmearing", level), m_cfg(config) {
+    : IAlgorithm("ParticleSmearing", level), m_cfg(config) {
   if (m_cfg.inputParticles.empty()) {
     throw std::invalid_argument("Missing input truth particles collection");
   }
   if (m_cfg.outputTrackParameters.empty()) {
     throw std::invalid_argument("Missing output tracks parameters collection");
   }
+
+  m_inputParticles.initialize(m_cfg.inputParticles);
+  m_outputTrackParameters.initialize(m_cfg.outputTrackParameters);
 }
 
 ActsExamples::ProcessCode ActsExamples::ParticleSmearing::execute(
     const AlgorithmContext& ctx) const {
   // setup input and output containers
-  const auto& particles =
-      ctx.eventStore.get<SimParticleContainer>(m_cfg.inputParticles);
+  const auto& particles = m_inputParticles(ctx);
   TrackParametersContainer parameters;
   parameters.reserve(particles.size());
 
@@ -44,7 +57,7 @@ ActsExamples::ProcessCode ActsExamples::ParticleSmearing::execute(
   for (auto&& [vtxId, vtxParticles] : groupBySecondaryVertex(particles)) {
     // a group contains at least one particle by construction. assume that all
     // particles within the group originate from the same position and use it to
-    // as the refernce position for the perigee frame.
+    // as the reference position for the perigee frame.
     auto perigee = Acts::Surface::makeShared<Acts::PerigeeSurface>(
         vtxParticles.begin()->position());
 
@@ -87,7 +100,7 @@ ActsExamples::ProcessCode ActsExamples::ParticleSmearing::execute(
 
       ACTS_VERBOSE("Smearing particle (pos, time, phi, theta, q/p):");
       ACTS_VERBOSE(" from: " << particle.position().transpose() << ", " << time
-                             << "," << phi << "," << theta << ","
+                             << ", " << phi << ", " << theta << ", "
                              << (q != 0 ? q / p : 1 / p));
       ACTS_VERBOSE("   to: " << perigee
                                     ->localToGlobal(
@@ -96,9 +109,9 @@ ActsExamples::ProcessCode ActsExamples::ParticleSmearing::execute(
                                                       params[Acts::eBoundLoc1]},
                                         particle.unitDirection() * p)
                                     .transpose()
-                             << ", " << params[Acts::eBoundTime] << ","
-                             << params[Acts::eBoundPhi] << ","
-                             << params[Acts::eBoundTheta] << ","
+                             << ", " << params[Acts::eBoundTime] << ", "
+                             << params[Acts::eBoundPhi] << ", "
+                             << params[Acts::eBoundTheta] << ", "
                              << params[Acts::eBoundQOverP]);
 
       // build the track covariance matrix using the smearing sigmas
@@ -122,6 +135,6 @@ ActsExamples::ProcessCode ActsExamples::ParticleSmearing::execute(
     }
   }
 
-  ctx.eventStore.add(m_cfg.outputTrackParameters, std::move(parameters));
+  m_outputTrackParameters(ctx, std::move(parameters));
   return ProcessCode::SUCCESS;
 }

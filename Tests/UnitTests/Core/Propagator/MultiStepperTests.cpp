@@ -8,11 +8,46 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include "Acts/Definitions/Algebra.hpp"
+#include "Acts/Definitions/Direction.hpp"
+#include "Acts/Definitions/TrackParametrization.hpp"
+#include "Acts/EventData/Charge.hpp"
+#include "Acts/EventData/MultiComponentBoundTrackParameters.hpp"
+#include "Acts/EventData/SingleBoundTrackParameters.hpp"
+#include "Acts/EventData/TrackParameters.hpp"
+#include "Acts/EventData/detail/CorrectedTransformationFreeToBound.hpp"
+#include "Acts/Geometry/GeometryContext.hpp"
 #include "Acts/MagneticField/ConstantBField.hpp"
+#include "Acts/MagneticField/MagneticFieldContext.hpp"
 #include "Acts/MagneticField/NullBField.hpp"
+#include "Acts/Propagator/DefaultExtension.hpp"
+#include "Acts/Propagator/EigenStepper.hpp"
 #include "Acts/Propagator/MultiEigenStepperLoop.hpp"
-#include "Acts/Propagator/MultiStepperAborters.hpp"
 #include "Acts/Propagator/Navigator.hpp"
+#include "Acts/Propagator/Propagator.hpp"
+#include "Acts/Propagator/StepperExtensionList.hpp"
+#include "Acts/Surfaces/PlaneSurface.hpp"
+#include "Acts/Surfaces/Surface.hpp"
+#include "Acts/Utilities/Helpers.hpp"
+#include "Acts/Utilities/Intersection.hpp"
+#include "Acts/Utilities/Logger.hpp"
+#include "Acts/Utilities/Result.hpp"
+
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <cstddef>
+#include <memory>
+#include <optional>
+#include <stdexcept>
+#include <tuple>
+#include <type_traits>
+#include <utility>
+#include <vector>
+
+namespace Acts {
+struct MultiStepperSurfaceReached;
+}  // namespace Acts
 
 using namespace Acts;
 using namespace Acts::VectorHelpers;
@@ -29,7 +64,7 @@ using SingleStepper = EigenStepper<StepperExtensionList<DefaultExtension>>;
 
 const double defaultStepSize = 123.;
 const double defaultTolerance = 234.;
-const auto defaultNDir = NavigationDirection::Backward;
+const auto defaultNDir = Direction::Backward;
 
 const auto defaultBField =
     std::make_shared<ConstantBField>(Vector3(1., 2.5, 33.33));
@@ -42,6 +77,10 @@ struct Options {
   double mass = 1.0;
   const Acts::Logger &logger = Acts::getDummyLogger();
 };
+
+struct MockNavigator {};
+
+static constexpr MockNavigator mockNavigator;
 
 struct Navigation {};
 
@@ -122,19 +161,6 @@ void test_multi_stepper_state() {
     }
   }
 
-  const auto expected_charge = []() {
-    if constexpr (std::is_same_v<charge_t, Neutral>) {
-      return 0.0;
-    } else {
-      return 1.0;
-    }
-  }();
-
-  BOOST_CHECK_EQUAL(ms.charge(state), expected_charge);
-  for (const auto cmp : const_iterable) {
-    BOOST_CHECK_EQUAL(cmp.charge(), expected_charge);
-  }
-
   BOOST_CHECK_EQUAL(state.pathAccumulated, 0.);
   for (const auto cmp : const_iterable) {
     BOOST_CHECK_EQUAL(cmp.pathAccumulated(), 0.);
@@ -213,16 +239,20 @@ void test_multi_stepper_vs_eigen_stepper() {
   MultiStepper multi_stepper(defaultBField);
   SingleStepper single_stepper(defaultBField);
 
+  for (auto cmp : multi_stepper.componentIterable(multi_state)) {
+    cmp.status() = Acts::Intersection3D::Status::reachable;
+  }
+
   // Do some steps and check that the results match
   for (int i = 0; i < 10; ++i) {
     // Single stepper
     auto single_prop_state = DummyPropState(single_state);
-    auto single_result = single_stepper.step(single_prop_state);
+    auto single_result = single_stepper.step(single_prop_state, mockNavigator);
     single_stepper.transportCovarianceToCurvilinear(single_state);
 
     // Multi stepper;
     auto multi_prop_state = DummyPropState(multi_state);
-    auto multi_result = multi_stepper.step(multi_prop_state);
+    auto multi_result = multi_stepper.step(multi_prop_state, mockNavigator);
     multi_stepper.transportCovarianceToCurvilinear(multi_state);
 
     // Check equality
@@ -233,7 +263,6 @@ void test_multi_stepper_vs_eigen_stepper() {
 
     for (const auto cmp : multi_stepper.constComponentIterable(multi_state)) {
       BOOST_CHECK_EQUAL(cmp.pars(), single_state.pars);
-      BOOST_CHECK_EQUAL(cmp.charge(), single_state.q);
       BOOST_CHECK_EQUAL(cmp.cov(), single_state.cov);
       BOOST_CHECK_EQUAL(cmp.jacTransport(), single_state.jacTransport);
       BOOST_CHECK_EQUAL(cmp.jacToGlobal(), single_state.jacToGlobal);
@@ -318,7 +347,6 @@ void test_components_modifying_accessors() {
   const auto projectors = std::make_tuple(
       [](auto &cmp) -> decltype(auto) { return cmp.status(); },
       [](auto &cmp) -> decltype(auto) { return cmp.pathAccumulated(); },
-      [](auto &cmp) -> decltype(auto) { return cmp.charge(); },
       [](auto &cmp) -> decltype(auto) { return cmp.weight(); },
       [](auto &cmp) -> decltype(auto) { return cmp.pars(); },
       [](auto &cmp) -> decltype(auto) { return cmp.cov(); },
@@ -328,7 +356,7 @@ void test_components_modifying_accessors() {
       [](auto &cmp) -> decltype(auto) { return cmp.jacToGlobal(); });
 
   std::apply(
-      [&](const auto &... projs) {
+      [&](const auto &...projs) {
         // clang-format off
         ( [&]() { modify(projs); check(projs); }(), ...);
         // clang-format on
@@ -372,11 +400,10 @@ void test_multi_stepper_surface_status_update() {
                     .isApprox(Vector3{-1.0, 0.0, 0.0}, 1.e-10));
 
   MultiState multi_state(geoCtx, magCtx, defaultNullBField, multi_pars,
-                         NavigationDirection::Forward, defaultStepSize,
-                         defaultTolerance);
+                         Direction::Forward, defaultStepSize, defaultTolerance);
   SingleStepper::State single_state(
       geoCtx, defaultNullBField->makeCache(magCtx), std::get<1>(multi_pars[0]),
-      NavigationDirection::Forward, defaultStepSize, defaultTolerance);
+      Direction::Forward, defaultStepSize, defaultTolerance);
 
   MultiStepper multi_stepper(defaultNullBField);
   SingleStepper single_stepper(defaultNullBField);
@@ -399,11 +426,11 @@ void test_multi_stepper_surface_status_update() {
   // Step forward now
   {
     auto multi_prop_state = DummyPropState(multi_state);
-    multi_stepper.step(multi_prop_state);
+    multi_stepper.step(multi_prop_state, mockNavigator);
 
     // Single stepper
     auto single_prop_state = DummyPropState(single_state);
-    single_stepper.step(single_prop_state);
+    single_stepper.step(single_prop_state, mockNavigator);
   }
 
   // Update surface status and check again
@@ -473,11 +500,10 @@ void test_component_bound_state() {
                     .isApprox(Vector3{-1.0, 0.0, 0.0}, 1.e-10));
 
   MultiState multi_state(geoCtx, magCtx, defaultNullBField, multi_pars,
-                         NavigationDirection::Forward, defaultStepSize,
-                         defaultTolerance);
+                         Direction::Forward, defaultStepSize, defaultTolerance);
   SingleStepper::State single_state(
       geoCtx, defaultNullBField->makeCache(magCtx), std::get<1>(multi_pars[0]),
-      NavigationDirection::Forward, defaultStepSize, defaultTolerance);
+      Direction::Forward, defaultStepSize, defaultTolerance);
 
   MultiStepper multi_stepper(defaultNullBField);
   SingleStepper single_stepper(defaultNullBField);
@@ -486,12 +512,12 @@ void test_component_bound_state() {
   {
     multi_stepper.updateSurfaceStatus(multi_state, *right_surface, false);
     auto multi_prop_state = DummyPropState(multi_state);
-    multi_stepper.step(multi_prop_state);
+    multi_stepper.step(multi_prop_state, mockNavigator);
 
     // Single stepper
     single_stepper.updateSurfaceStatus(single_state, *right_surface, false);
     auto single_prop_state = DummyPropState(single_state);
-    single_stepper.step(single_prop_state);
+    single_stepper.step(single_prop_state, mockNavigator);
   }
 
   // Check component-wise bound-state
@@ -694,7 +720,7 @@ BOOST_AUTO_TEST_CASE(remove_add_components_test) {
 }
 
 //////////////////////////////////////////////////
-// Instatiate a Propagator with the MultiStepper
+// Instantiate a Propagator with the MultiStepper
 //////////////////////////////////////////////////
 
 template <typename multi_stepper_t>
@@ -702,7 +728,7 @@ void propagator_instatiation_test_function() {
   auto bField = std::make_shared<NullBField>();
   multi_stepper_t multi_stepper(bField);
   Propagator<multi_stepper_t, Navigator> propagator(
-      multi_stepper, Navigator{Navigator::Config{}});
+      std::move(multi_stepper), Navigator{Navigator::Config{}});
 
   auto surface = Acts::Surface::makeShared<Acts::PlaneSurface>(
       Vector3::Zero(), Vector3{1.0, 0.0, 0.0});
@@ -714,7 +740,7 @@ void propagator_instatiation_test_function() {
   MultiComponentBoundTrackParameters<SinglyCharged> pars(surface, cmps);
 
   // This only checks that this compiles, not that it runs without errors
-  // @TODO: Add test that checks the target aborter works corretly
+  // @TODO: Add test that checks the target aborter works correctly
 
   // Instantiate with target
   using type_a =

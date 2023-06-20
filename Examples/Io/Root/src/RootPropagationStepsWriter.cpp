@@ -8,14 +8,18 @@
 
 #include "ActsExamples/Io/Root/RootPropagationStepsWriter.hpp"
 
-#include "ActsExamples/Framework/WhiteBoard.hpp"
-#include "ActsExamples/Utilities/Paths.hpp"
+#include "Acts/Definitions/Algebra.hpp"
+#include "Acts/Utilities/Helpers.hpp"
+#include "ActsExamples/Framework/AlgorithmContext.hpp"
 #include <Acts/Geometry/GeometryIdentifier.hpp>
 #include <Acts/Geometry/TrackingVolume.hpp>
 #include <Acts/Propagator/ConstrainedStep.hpp>
 #include <Acts/Surfaces/Surface.hpp>
+#include <Acts/Utilities/Helpers.hpp>
 
 #include <ios>
+#include <memory>
+#include <ostream>
 #include <stdexcept>
 
 #include <TFile.h>
@@ -77,7 +81,7 @@ ActsExamples::RootPropagationStepsWriter::~RootPropagationStepsWriter() {
   }
 }
 
-ActsExamples::ProcessCode ActsExamples::RootPropagationStepsWriter::endRun() {
+ActsExamples::ProcessCode ActsExamples::RootPropagationStepsWriter::finalize() {
   // Write the tree
   m_outputFile->cd();
   m_outputTree->Write();

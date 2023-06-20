@@ -8,18 +8,17 @@
 
 #include "ActsExamples/Io/Csv/CsvTrackParameterReader.hpp"
 
-#include "Acts/Definitions/Units.hpp"
+#include "Acts/Definitions/Algebra.hpp"
+#include "Acts/Definitions/TrackParametrization.hpp"
 #include "Acts/Surfaces/PerigeeSurface.hpp"
 #include "Acts/Surfaces/Surface.hpp"
 #include "ActsExamples/EventData/Track.hpp"
-#include "ActsExamples/Framework/WhiteBoard.hpp"
+#include "ActsExamples/Framework/AlgorithmContext.hpp"
 #include "ActsExamples/Utilities/Paths.hpp"
 
-#include <fstream>
-#include <ios>
+#include <algorithm>
 #include <stdexcept>
 #include <string>
-#include <vector>
 
 #include <dfe/dfe_io_dsv.hpp>
 
@@ -38,6 +37,8 @@ ActsExamples::CsvTrackParameterReader::CsvTrackParameterReader(
   if (m_cfg.outputTrackParameters.empty()) {
     throw std::invalid_argument("Missing output collection");
   }
+
+  m_outputTrackParameters.initialize(m_cfg.outputTrackParameters);
 }
 
 std::string
@@ -108,7 +109,7 @@ ActsExamples::ProcessCode ActsExamples::CsvTrackParameterReader::read(
     trackParameters.emplace_back(surface, params, q, cov);
   }
 
-  ctx.eventStore.add(m_cfg.outputTrackParameters, std::move(trackParameters));
+  m_outputTrackParameters(ctx, std::move(trackParameters));
 
   return ProcessCode::SUCCESS;
 }

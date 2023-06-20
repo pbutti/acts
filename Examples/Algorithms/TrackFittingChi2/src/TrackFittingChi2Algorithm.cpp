@@ -8,17 +8,34 @@
 
 #include "ActsExamples/TrackFittingChi2/TrackFittingChi2Algorithm.hpp"
 
-#include "Acts/EventData/Track.hpp"
-#include "Acts/Surfaces/PerigeeSurface.hpp"
+#include "Acts/Definitions/Algebra.hpp"
+#include "Acts/EventData/SingleBoundTrackParameters.hpp"
+#include "Acts/EventData/SourceLink.hpp"
+#include "Acts/EventData/TrackContainer.hpp"
+#include "Acts/EventData/TrackProxy.hpp"
+#include "Acts/EventData/VectorMultiTrajectory.hpp"
+#include "Acts/EventData/VectorTrackContainer.hpp"
+#include "Acts/Geometry/TrackingGeometry.hpp"
+#include "Acts/Propagator/Propagator.hpp"
+#include "Acts/Utilities/Delegate.hpp"
+#include "ActsExamples/EventData/MeasurementCalibration.hpp"
 #include "ActsExamples/EventData/ProtoTrack.hpp"
-#include "ActsExamples/EventData/Trajectories.hpp"
-#include "ActsExamples/Framework/WhiteBoard.hpp"
+#include "ActsExamples/Framework/AlgorithmContext.hpp"
 
+#include <cstddef>
+#include <functional>
+#include <ostream>
 #include <stdexcept>
+#include <system_error>
+#include <utility>
+
+namespace Acts {
+class Surface;
+}  // namespace Acts
 
 ActsExamples::TrackFittingChi2Algorithm::TrackFittingChi2Algorithm(
     Config config, Acts::Logging::Level level)
-    : ActsExamples::BareAlgorithm("TrackFittingChi2Algorithm", level),
+    : ActsExamples::IAlgorithm("TrackFittingChi2Algorithm", level),
       m_cfg(std::move(config)) {
   if (m_cfg.inputMeasurements.empty()) {
     throw std::invalid_argument("Missing input measurement collection");
@@ -36,38 +53,39 @@ ActsExamples::TrackFittingChi2Algorithm::TrackFittingChi2Algorithm(
   if (not m_cfg.trackingGeometry) {
     throw std::invalid_argument("Missing tracking geometry");
   }
-  if (m_cfg.outputTrajectories.empty()) {
-    throw std::invalid_argument("Missing output trajectories collection");
+  if (m_cfg.outputTracks.empty()) {
+    throw std::invalid_argument("Missing output track collection");
   }
+
+  m_measurementReadHandle.initialize(m_cfg.inputMeasurements);
+  m_sourceLinkReadHandle.initialize(m_cfg.inputSourceLinks);
+  m_protoTracksReadHandle.initialize(m_cfg.inputProtoTracks);
+  m_initialParametersReadHandle.initialize(m_cfg.inputInitialTrackParameters);
+  m_outputTracks.initialize(m_cfg.outputTracks);
 }
 
 ActsExamples::ProcessCode ActsExamples::TrackFittingChi2Algorithm::execute(
     const ActsExamples::AlgorithmContext& ctx) const {
   // Read input data
-  const auto& measurements =
-      ctx.eventStore.get<MeasurementContainer>(m_cfg.inputMeasurements);
-  const auto& sourceLinks =
-      ctx.eventStore.get<IndexSourceLinkContainer>(m_cfg.inputSourceLinks);
-  const auto& protoTracks =
-      ctx.eventStore.get<ProtoTrackContainer>(m_cfg.inputProtoTracks);
-  const auto& initialParameters = ctx.eventStore.get<TrackParametersContainer>(
-      m_cfg.inputInitialTrackParameters);
+  const auto& measurements = m_measurementReadHandle(ctx);
+  const auto& sourceLinks = m_sourceLinkReadHandle(ctx);
+  const auto& protoTracks = m_protoTracksReadHandle(ctx);
+  const auto& initialParameters = m_initialParametersReadHandle(ctx);
 
   // Consistency cross checks
   if (protoTracks.size() != initialParameters.size()) {
-    ACTS_FATAL("Inconsistent number of proto tracks and parameters");
+    ACTS_FATAL("Inconsistent number of proto tracks and parameters "
+               << protoTracks.size() << " vs " << initialParameters.size());
     return ProcessCode::ABORT;
   }
-
-  // Prepare the output data with MultiTrajectory
-  TrajectoriesContainer trajectories;
-  trajectories.reserve(protoTracks.size());
 
   // Set Chi2 options
   Acts::Experimental::Chi2FitterExtensions<Acts::VectorMultiTrajectory>
       extensions;
-  MeasurementCalibrator calibrator{measurements};
-  extensions.calibrator.connect<&MeasurementCalibrator::calibrate>(&calibrator);
+  PassThroughCalibrator pcalibrator;
+  MeasurementCalibratorAdapter calibrator(pcalibrator, measurements);
+  extensions.calibrator.connect<&MeasurementCalibratorAdapter::calibrate>(
+      &calibrator);
 
   Acts::Experimental::Chi2FitterOptions chi2Options(
       ctx.geoContext, ctx.magFieldContext, ctx.calibContext, extensions,
@@ -77,6 +95,14 @@ ActsExamples::ProcessCode ActsExamples::TrackFittingChi2Algorithm::execute(
   // kfOptions.multipleScattering = m_cfg.multipleScattering;
   // kfOptions.energyLoss = m_cfg.energyLoss;
   // TODO: pass options to constructor, or here?
+
+  auto trackContainer = std::make_shared<Acts::VectorTrackContainer>();
+  auto trackStateContainer = std::make_shared<Acts::VectorMultiTrajectory>();
+  TrackContainer tracks(trackContainer, trackStateContainer);
+
+  tracks.addColumn<Acts::ActsScalar>("chi2");
+
+  static Acts::ConstTrackAccessor<Acts::ActsScalar> chisquare{"chi2"};
 
   // Perform the fit for each input track
   std::vector<Acts::SourceLink> trackSourceLinks;
@@ -94,7 +120,6 @@ ActsExamples::ProcessCode ActsExamples::TrackFittingChi2Algorithm::execute(
     // We can have empty tracks which must give empty fit results so the number
     // of entries in input and output containers matches.
     if (protoTrack.empty()) {
-      trajectories.push_back(Trajectories());
       ACTS_WARNING("Empty track " << itrack << " found.");
       continue;
     }
@@ -121,56 +146,37 @@ ActsExamples::ProcessCode ActsExamples::TrackFittingChi2Algorithm::execute(
       }
     }
 
-    auto trackContainer = std::make_shared<Acts::VectorTrackContainer>();
-    auto trackStateContainer = std::make_shared<Acts::VectorMultiTrajectory>();
-    auto tracks =
-        std::make_unique<TrackContainer>(trackContainer, trackStateContainer);
-
-    tracks->addColumn<Acts::ActsScalar>("chi2");
-    static Acts::ConstTrackAccessor<Acts::ActsScalar> chisquare{"chi2"};
-
     ACTS_DEBUG("invoke fitter");
     auto result = fitTrack(trackSourceLinks, initialParams, chi2Options,
-                           surfSequence, *tracks);
+                           surfSequence, tracks);
 
     if (result.ok()) {
       ACTS_DEBUG("result ok");
       // Get the fit output object
-      auto& track = result.value();
-      // The track entry indices container. One element here.
-      std::vector<Acts::MultiTrajectoryTraits::IndexType> trackTips;
-      trackTips.reserve(1);
-      trackTips.emplace_back(track.tipIndex());
-      // The fitted parameters container. One element (at most) here.
-      Trajectories::IndexedParameters indexedParams;
+      const auto& track = result.value();
       ACTS_VERBOSE("final χ² = " << chisquare(track));
       ACTS_VERBOSE("lastMeasurementIndex = " << track.tipIndex());
 
       if (track.hasReferenceSurface()) {
         ACTS_VERBOSE("Fitted parameters for track "
                      << itrack << ": " << track.parameters().transpose());
-        // Push the fitted parameters to the container
-        indexedParams.emplace(
-            std::pair{track.tipIndex(),
-                      TrackParameters{track.referenceSurface().getSharedPtr(),
-                                      track.parameters(), track.covariance()}});
       } else {
         ACTS_DEBUG("No fitted parameters for track " << itrack);
       }
-      // store the result
-      trajectories.emplace_back(trackStateContainer, std::move(trackTips),
-                                std::move(indexedParams));
     } else {
       ACTS_WARNING("Fit failed for track "
                    << itrack << " with error: " << result.error() << ", "
                    << result.error().message());
-      // Fit failed. Add an empty result so the output container has
-      // the same number of entries as the input.
-      trajectories.push_back(Trajectories());
     }
   }
 
-  ctx.eventStore.add(m_cfg.outputTrajectories, std::move(trajectories));
+  ConstTrackContainer constTracks{
+      std::make_shared<Acts::ConstVectorTrackContainer>(
+          std::move(*trackContainer)),
+      std::make_shared<Acts::ConstVectorMultiTrajectory>(
+          std::move(*trackStateContainer))};
+
+  m_outputTracks(ctx, std::move(constTracks));
   // TODO: add chi2 values as output?
   return ActsExamples::ProcessCode::SUCCESS;
 }

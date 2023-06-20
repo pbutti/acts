@@ -37,7 +37,7 @@ static void printHeader(std::ostream& os, const Acts::MaterialSlab& slab,
   os << "# delta is the total energy loss\n";
   os << "# delta_ion is the energy loss due to ionisation and excitation\n";
   os << "# delta_rad is the energy loss due to radiative effects\n";
-  os << "# sigma is the width of the enery loss distribution\n";
+  os << "# sigma is the width of the energy loss distribution\n";
   // column names
   os << std::left;
   os << std::setw(width) << "momentum" << separator;
@@ -51,7 +51,7 @@ static void printHeader(std::ostream& os, const Acts::MaterialSlab& slab,
 
 static void printLine(std::ostream& os, float mass, float momentum, float delta,
                       float deltaIon, float deltaRad, float sigma) {
-  const auto energy = std::sqrt(mass * mass + momentum * momentum);
+  const auto energy = std::hypot(mass, momentum);
   const auto beta = momentum / energy;
   const auto betaGamma = momentum / mass;
   os << std::right << std::fixed << std::setprecision(precision);

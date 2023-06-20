@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional, Union, List
 from enum import Enum
 from collections import namedtuple
 import warnings
@@ -10,7 +10,7 @@ import acts.examples
 u = acts.UnitConstants
 
 SeedingAlgorithm = Enum(
-    "SeedingAlgorithm", "Default TruthSmeared TruthEstimated Orthogonal"
+    "SeedingAlgorithm", "Default TruthSmeared TruthEstimated Orthogonal HoughTransform"
 )
 
 TruthSeedRanges = namedtuple(
@@ -34,17 +34,16 @@ SeedFinderConfigArg = namedtuple(
         "radLengthPerSeed",
         "minPt",
         "impactMax",
+        "deltaPhiMax",
         "interactionPointCut",
         "arithmeticAverageCotTheta",
         "deltaZMax",
         "maxPtScattering",
         "zBinEdges",
-        "skipPreviousTopSP",
         "zBinsCustomLooping",
         "rRangeMiddleSP",
         "useVariableMiddleSPRange",
         "binSizeR",
-        "forceRadialSorting",
         "seedConfirmation",
         "centralSeedConfirmationRange",
         "forwardSeedConfirmationRange",
@@ -55,8 +54,9 @@ SeedFinderConfigArg = namedtuple(
         "collisionRegion",  # (min,max)
         "r",  # (min,max)
         "z",  # (min,max)
+        "zOutermostLayers",  # (min,max)
     ],
-    defaults=[None] * 20 + [(None, None)] * 7,
+    defaults=[None] * 19 + [(None, None)] * 8,
 )
 SeedFinderOptionsArg = namedtuple(
     "SeedFinderOptions", ["beamPos", "bFieldInZ"], defaults=[(None, None), None]
@@ -72,13 +72,12 @@ SeedFilterConfigArg = namedtuple(
         "numSeedIncrement",
         "seedWeightIncrement",
         "seedConfirmation",
-        "curvatureSortingInFilter",
         "maxSeedsPerSpMConf",
         "maxQualitySeedsPerSpMConf",
         "useDeltaRorTopRadius",
         "deltaRMin",
     ],
-    defaults=[None] * 12,
+    defaults=[None] * 11,
 )
 
 SpacePointGridConfigArg = namedtuple(
@@ -105,40 +104,36 @@ SeedingAlgorithmConfigArg = namedtuple(
     defaults=[None] * 4,
 )
 
-TrackParamsEstimationConfig = namedtuple(
-    "TrackParamsEstimationConfig",
+TruthEstimatedSeedingAlgorithmConfigArg = namedtuple(
+    "TruthSeederConfig",
     [
         "deltaR",  # (min,max)
     ],
     defaults=[(None, None)],
 )
 
-TrackSelectorRanges = namedtuple(
-    "TrackSelectorRanges",
-    [
-        "loc0",
-        "loc1",
-        "time",
-        "eta",
-        "absEta",
-        "pt",
-        "phi",
-        "removeNeutral",
-        "removeCharged",
-    ],
-    defaults=[(None, None)] * 7 + [None] * 2,
-)
-
-CKFPerformanceConfig = namedtuple(
-    "CKFPerformanceConfig",
-    ["truthMatchProbMin", "nMeasurementsMin", "ptMin"],
-    defaults=[None] * 3,
+TrackSelectorConfig = namedtuple(
+    "TrackSelectorConfig",
+    ["loc0", "loc1", "time", "eta", "absEta", "pt", "phi", "nMeasurementsMin"],
+    defaults=[(None, None)] * 7 + [None],
 )
 
 AmbiguityResolutionConfig = namedtuple(
     "AmbiguityResolutionConfig",
-    ["maximumSharedHits"],
+    ["maximumSharedHits", "nMeasurementsMin", "maximumIterations"],
+    defaults=[None] * 3,
+)
+
+AmbiguityResolutionMLConfig = namedtuple(
+    "AmbiguityResolutionMLConfig",
+    ["nMeasurementsMin"],
     defaults=[None] * 1,
+)
+
+AmbiguityResolutionMLDBScanConfig = namedtuple(
+    "AmbiguityResolutionMLDBScanConfig",
+    ["nMeasurementsMin", "epsilonDBScan", "minPointsDBScan"],
+    defaults=[None] * 3,
 )
 
 
@@ -157,7 +152,7 @@ class VertexFinder(Enum):
     seedFilterConfigArg=SeedFilterConfigArg,
     spacePointGridConfigArg=SpacePointGridConfigArg,
     seedingAlgorithmConfigArg=SeedingAlgorithmConfigArg,
-    trackParamsEstimationConfig=TrackParamsEstimationConfig,
+    truthEstimatedSeedingAlgorithmConfigArg=TruthEstimatedSeedingAlgorithmConfigArg,
     logLevel=acts.logging.Level,
 )
 def addSeeding(
@@ -168,14 +163,16 @@ def addSeeding(
     seedingAlgorithm: SeedingAlgorithm = SeedingAlgorithm.Default,
     truthSeedRanges: Optional[TruthSeedRanges] = TruthSeedRanges(),
     particleSmearingSigmas: ParticleSmearingSigmas = ParticleSmearingSigmas(),
+    initialSigmas: Optional[list] = None,
     initialVarInflation: Optional[list] = None,
     seedFinderConfigArg: SeedFinderConfigArg = SeedFinderConfigArg(),
     seedFinderOptionsArg: SeedFinderOptionsArg = SeedFinderOptionsArg(),
     seedFilterConfigArg: SeedFilterConfigArg = SeedFilterConfigArg(),
     spacePointGridConfigArg: SpacePointGridConfigArg = SpacePointGridConfigArg(),
     seedingAlgorithmConfigArg: SeedingAlgorithmConfigArg = SeedingAlgorithmConfigArg(),
-    trackParamsEstimationConfig: TrackParamsEstimationConfig = TrackParamsEstimationConfig(),
-    inputParticles: str = "particles_initial",
+    houghTransformConfig: acts.examples.HoughTransformSeeder.Config = acts.examples.HoughTransformSeeder.Config(),
+    truthEstimatedSeedingAlgorithmConfigArg: TruthEstimatedSeedingAlgorithmConfigArg = TruthEstimatedSeedingAlgorithmConfigArg(),
+    inputParticles: str = "particles",
     outputDirRoot: Optional[Union[Path, str]] = None,
     logLevel: Optional[acts.logging.Level] = None,
     rnd: Optional[acts.examples.RandomNumbers] = None,
@@ -194,29 +191,31 @@ def addSeeding(
     truthSeedRanges : TruthSeedRanges(rho, z, phi, eta, absEta, pt, nHits)
         TruthSeedSelector configuration. Each range is specified as a tuple of (min,max).
         Defaults of no cuts specified in Examples/Algorithms/TruthTracking/ActsExamples/TruthTracking/TruthSeedSelector.hpp
-        If specified as None, don't run ParticleSmearing at all (and use addCKFTracks(selectedParticles="particles_initial"))
+        If specified as None, don't run ParticleSmearing at all (and use addCKFTracks(selectedParticles="particles"))
     particleSmearingSigmas : ParticleSmearingSigmas(d0, d0PtA, d0PtB, z0, z0PtA, z0PtB, t0, phi, theta, pRel)
         ParticleSmearing configuration.
         Defaults specified in Examples/Algorithms/TruthTracking/ActsExamples/TruthTracking/ParticleSmearing.hpp
+    initialSigmas : list
+        Sets the initial covariance matrix diagonal. This is ignored in case of TruthSmearing.
+        Defaults specified in Examples/Algorithms/TrackFinding/include/ActsExamples/TrackFinding/TrackParamsEstimationAlgorithm.hpp
     initialVarInflation : list
         List of 6 scale factors to inflate the initial covariance matrix
-        Defaults (all 1) specified in Examples/Algorithms/TruthTracking/ActsExamples/TruthTracking/ParticleSmearing.hpp
-    seedFinderConfigArg : SeedFinderConfigArg(maxSeedsPerSpM, cotThetaMax, sigmaScattering, radLengthPerSeed, minPt, impactMax, interactionPointCut, arithmeticAverageCotTheta, deltaZMax, maxPtScattering, zBinEdges, skipPreviousTopSP, zBinsCustomLooping, rRangeMiddleSP, useVariableMiddleSPRange, binSizeR, forceRadialSorting, seedConfirmation, centralSeedConfirmationRange, forwardSeedConfirmationRange, deltaR, deltaRBottomSP, deltaRTopSP, deltaRMiddleSPRange, collisionRegion, r, z)
-        SeedFinderConfig settings. deltaR, deltaRBottomSP, deltaRTopSP, deltaRMiddleSPRange, collisionRegion, r, z are ranges specified as a tuple of (min,max). beamPos is specified as (x,y).
+        Defaults specified in Examples/Algorithms/TrackFinding/include/ActsExamples/TrackFinding/TrackParamsEstimationAlgorithm.hpp
+    seedFinderConfigArg : SeedFinderConfigArg(maxSeedsPerSpM, cotThetaMax, sigmaScattering, radLengthPerSeed, minPt, impactMax, deltaPhiMax, interactionPointCut, arithmeticAverageCotTheta, deltaZMax, maxPtScattering, zBinEdges, zBinsCustomLooping, rRangeMiddleSP, useVariableMiddleSPRange, binSizeR, seedConfirmation, centralSeedConfirmationRange, forwardSeedConfirmationRange, deltaR, deltaRBottomSP, deltaRTopSP, deltaRMiddleSPRange, collisionRegion, r, z, zOutermostLayers)
+        SeedFinderConfig settings. deltaR, deltaRBottomSP, deltaRTopSP, deltaRMiddleSPRange, collisionRegion, r, z, zOutermostLayers are ranges specified as a tuple of (min,max). beamPos is specified as (x,y).
         Defaults specified in Core/include/Acts/Seeding/SeedFinderConfig.hpp
     seedFinderOptionsArg :  SeedFinderOptionsArg(bFieldInZ, beamPos)
         Defaults specified in Core/include/Acts/Seeding/SeedFinderConfig.hpp
-    seedFilterConfigArg : SeedFilterConfigArg(compatSeedWeight, compatSeedLimit, numSeedIncrement, seedWeightIncrement, seedConfirmation, curvatureSortingInFilter, maxSeedsPerSpMConf, maxQualitySeedsPerSpMConf, useDeltaRorTopRadius)
+    seedFilterConfigArg : SeedFilterConfigArg(compatSeedWeight, compatSeedLimit, numSeedIncrement, seedWeightIncrement, seedConfirmation, maxSeedsPerSpMConf, maxQualitySeedsPerSpMConf, useDeltaRorTopRadius)
                                 Defaults specified in Core/include/Acts/Seeding/SeedFilterConfig.hpp
     spacePointGridConfigArg : SpacePointGridConfigArg(rMax, zBinEdges, phiBinDeflectionCoverage, phi, impactMax)
                                 SpacePointGridConfigArg settings. phi is specified as a tuple of (min,max).
         Defaults specified in Core/include/Acts/Seeding/SpacePointGrid.hpp
     seedingAlgorithmConfigArg : SeedingAlgorithmConfigArg(allowSeparateRMax, zBinNeighborsTop, zBinNeighborsBottom, numPhiNeighbors)
                                 Defaults specified in Examples/Algorithms/TrackFinding/include/ActsExamples/TrackFinding/SeedingAlgorithm.hpp
-    trackParamsEstimationConfig : TrackParamsEstimationConfig(deltaR)
-        TrackParamsEstimationAlgorithm configuration. Currently only deltaR=(min,max) range specified here.
-        Defaults specified in Examples/Algorithms/TrackFinding/include/ActsExamples/TrackFinding/TrackParamsEstimationAlgorithm.hpp
-    inputParticles : str, "particles_initial"
+    truthEstimatedSeedingAlgorithmConfigArg : TruthEstimatedSeedingAlgorithmConfigArg(deltaR)
+        Currently only deltaR=(min,max) range specified here.
+    inputParticles : str, "particles"
         input particles name in the WhiteBoard
     outputDirRoot : Path|str, path, None
         the output folder for the Root output, None triggers no output
@@ -228,10 +227,16 @@ def addSeeding(
 
     logLevel = acts.examples.defaultLogging(s, logLevel)()
     logger = acts.logging.getLogger("addSeeding")
+    logger.setLevel(logLevel)
 
     if truthSeedRanges is not None:
-        selectedParticles = addSeedingTruthSelection(
-            s, inputParticles, truthSeedRanges, logLevel
+        selectedParticles = "truth_seeds_selected"
+        addSeedingTruthSelection(
+            s,
+            inputParticles,
+            selectedParticles,
+            truthSeedRanges,
+            logLevel,
         )
     else:
         selectedParticles = inputParticles
@@ -240,7 +245,7 @@ def addSeeding(
     # finding and track parameters estimation
     if seedingAlgorithm == SeedingAlgorithm.TruthSmeared:
         logger.info("Using smeared truth particles for seeding")
-        addTruthSmearing(
+        addTruthSmearedSeeding(
             s,
             rnd,
             selectedParticles,
@@ -255,19 +260,16 @@ def addSeeding(
         # Run either: truth track finding or seeding
         if seedingAlgorithm == SeedingAlgorithm.TruthEstimated:
             logger.info("Using truth track finding from space points for seeding")
-            # Use truth tracking
-            truthTrackFinder = acts.examples.TruthTrackFinder(
-                level=logLevel,
-                inputParticles=selectedParticles,
-                inputMeasurementParticlesMap="measurement_particles_map",
-                outputProtoTracks="prototracks",
+            seeds = addTruthEstimatedSeeding(
+                s,
+                spacePoints,
+                selectedParticles,
+                truthEstimatedSeedingAlgorithmConfigArg,
+                logLevel,
             )
-            s.addAlgorithm(truthTrackFinder)
-            inputProtoTracks = truthTrackFinder.config.outputProtoTracks
-            inputSeeds = ""
         elif seedingAlgorithm == SeedingAlgorithm.Default:
             logger.info("Using default seeding")
-            inputProtoTracks, inputSeeds = addStandardSeeding(
+            seeds = addStandardSeeding(
                 s,
                 spacePoints,
                 seedingAlgorithmConfigArg,
@@ -279,7 +281,7 @@ def addSeeding(
             )
         elif seedingAlgorithm == SeedingAlgorithm.Orthogonal:
             logger.info("Using orthogonal seeding")
-            inputProtoTracks, inputSeeds = addOrthogonalSeeding(
+            seeds = addOrthogonalSeeding(
                 s,
                 spacePoints,
                 seedFinderConfigArg,
@@ -287,45 +289,65 @@ def addSeeding(
                 seedFilterConfigArg,
                 logLevel,
             )
+        elif seedingAlgorithm == SeedingAlgorithm.HoughTransform:
+            logger.info("Using Hough Transform seeding")
+            houghTransformConfig.inputSpacePoints = [spacePoints]
+            houghTransformConfig.inputMeasurements = "measurements"
+            houghTransformConfig.inputSourceLinks = "sourcelinks"
+            houghTransformConfig.outputProtoTracks = "prototracks"
+            houghTransformConfig.outputSeeds = "seeds"
+            houghTransformConfig.trackingGeometry = trackingGeometry
+            seeds = addHoughTransformSeeding(s, houghTransformConfig, logLevel)
         else:
             logger.fatal("unknown seedingAlgorithm %s", seedingAlgorithm)
 
         parEstimateAlg = acts.examples.TrackParamsEstimationAlgorithm(
             level=logLevel,
-            inputSeeds=inputSeeds,
-            inputProtoTracks=inputProtoTracks,
-            inputSpacePoints=[spacePoints],
-            inputSourceLinks="sourcelinks",
+            inputSeeds=seeds,
             outputTrackParameters="estimatedparameters",
-            outputProtoTracks="prototracks_estimated",
             trackingGeometry=trackingGeometry,
             magneticField=field,
             **acts.examples.defaultKWArgs(
+                sigmaLoc0=initialSigmas[0] if initialSigmas is not None else None,
+                sigmaLoc1=initialSigmas[1] if initialSigmas is not None else None,
+                sigmaPhi=initialSigmas[2] if initialSigmas is not None else None,
+                sigmaTheta=initialSigmas[3] if initialSigmas is not None else None,
+                sigmaQOverP=initialSigmas[4] if initialSigmas is not None else None,
+                sigmaT0=initialSigmas[5] if initialSigmas is not None else None,
                 initialVarInflation=initialVarInflation,
-                deltaRMin=trackParamsEstimationConfig.deltaR[0],
-                deltaRMax=trackParamsEstimationConfig.deltaR[1],
             ),
         )
         s.addAlgorithm(parEstimateAlg)
+
+        prototracks = "seed-prototracks"
+        s.addAlgorithm(
+            acts.examples.SeedsToPrototracks(
+                level=logLevel,
+                inputSeeds=seeds,
+                outputProtoTracks=prototracks,
+            )
+        )
 
         if outputDirRoot is not None:
             addSeedPerformanceWriters(
                 s,
                 outputDirRoot,
-                inputProtoTracks,
+                seeds,
+                prototracks,
                 selectedParticles,
                 inputParticles,
                 parEstimateAlg.config.outputTrackParameters,
-                parEstimateAlg.config.outputProtoTracks,
                 logLevel,
             )
+
     return s
 
 
 def addSeedingTruthSelection(
     s: acts.examples.Sequencer,
     inputParticles: str,
-    truthSeedRanges: str,
+    outputParticles: str,
+    truthSeedRanges: TruthSeedRanges,
     logLevel: acts.logging.Level = None,
 ):
     """adds truth particles filtering before filtering
@@ -351,18 +373,17 @@ def addSeedingTruthSelection(
         level=logLevel,
         inputParticles=inputParticles,
         inputMeasurementParticlesMap="measurement_particles_map",
-        outputParticles="truth_seeds_selected",
+        outputParticles=outputParticles,
     )
     s.addAlgorithm(selAlg)
-    return selAlg.config.outputParticles
 
 
-def addTruthSmearing(
+def addTruthSmearedSeeding(
     sequence: acts.examples.Sequencer,
-    rnd: acts.examples.RandomNumbers,
+    rnd: Optional[acts.examples.RandomNumbers],
     selectedParticles: str,
     particleSmearingSigmas: ParticleSmearingSigmas,
-    initialVarInflation: float,
+    initialVarInflation: List[float],
     logLevel: acts.logging.Level = None,
 ):
     """adds algorithm that would mimic detector response uncertainties for truth seeding
@@ -393,6 +414,44 @@ def addTruthSmearing(
     )
     sequence.addAlgorithm(ptclSmear)
 
+    truthTrkFndAlg = acts.examples.TruthTrackFinder(
+        level=logLevel,
+        inputParticles=selectedParticles,
+        inputMeasurementParticlesMap="measurement_particles_map",
+        outputProtoTracks="truth_particle_tracks",
+    )
+    sequence.addAlgorithm(truthTrkFndAlg)
+
+
+def addTruthEstimatedSeeding(
+    sequence: acts.examples.Sequencer,
+    spacePoints: str,
+    inputParticles: str,
+    TruthEstimatedSeedingAlgorithmConfigArg: TruthEstimatedSeedingAlgorithmConfigArg,
+    logLevel: acts.logging.Level = None,
+):
+    """adds truth seeding
+    For parameters description see addSeeding
+    """
+    logLevel = acts.examples.defaultLogging(sequence, logLevel)()
+
+    truthSeeding = acts.examples.TruthSeedingAlgorithm(
+        level=logLevel,
+        inputParticles=inputParticles,
+        inputMeasurementParticlesMap="measurement_particles_map",
+        inputSpacePoints=[spacePoints],
+        outputParticles="truth_seeded_particles",
+        outputProtoTracks="truth_particle_tracks",
+        outputSeeds="seeds",
+        **acts.examples.defaultKWArgs(
+            deltaRMin=TruthEstimatedSeedingAlgorithmConfigArg.deltaR[0],
+            deltaRMax=TruthEstimatedSeedingAlgorithmConfigArg.deltaR[1],
+        ),
+    )
+    sequence.addAlgorithm(truthSeeding)
+
+    return truthSeeding.config.outputSeeds
+
 
 def addSpacePointsMaking(
     sequence: acts.examples.Sequencer,
@@ -422,7 +481,7 @@ def addStandardSeeding(
     sequence: acts.examples.Sequencer,
     spacePoints: str,
     seedingAlgorithmConfigArg: SeedingAlgorithmConfigArg,
-    seedFinderConfigArg: SeedFilterConfigArg,
+    seedFinderConfigArg: SeedFinderConfigArg,
     seedFinderOptionsArg: SeedFinderOptionsArg,
     seedFilterConfigArg: SeedFilterConfigArg,
     spacePointGridConfigArg: SpacePointGridConfigArg,
@@ -465,6 +524,14 @@ def addStandardSeeding(
             collisionRegionMax=seedFinderConfigArg.collisionRegion[1],
             zMin=seedFinderConfigArg.z[0],
             zMax=seedFinderConfigArg.z[1],
+            zOutermostLayers=(
+                seedFinderConfigArg.zOutermostLayers[0]
+                if seedFinderConfigArg.zOutermostLayers[0] is not None
+                else seedFinderConfigArg.z[0],
+                seedFinderConfigArg.zOutermostLayers[1]
+                if seedFinderConfigArg.zOutermostLayers[1] is not None
+                else seedFinderConfigArg.z[1],
+            ),
             maxSeedsPerSpM=seedFinderConfigArg.maxSeedsPerSpM,
             cotThetaMax=seedFinderConfigArg.cotThetaMax,
             sigmaScattering=seedFinderConfigArg.sigmaScattering,
@@ -476,12 +543,10 @@ def addStandardSeeding(
             deltaZMax=seedFinderConfigArg.deltaZMax,
             maxPtScattering=seedFinderConfigArg.maxPtScattering,
             zBinEdges=seedFinderConfigArg.zBinEdges,
-            skipPreviousTopSP=seedFinderConfigArg.skipPreviousTopSP,
             zBinsCustomLooping=seedFinderConfigArg.zBinsCustomLooping,
             rRangeMiddleSP=seedFinderConfigArg.rRangeMiddleSP,
             useVariableMiddleSPRange=seedFinderConfigArg.useVariableMiddleSPRange,
             binSizeR=seedFinderConfigArg.binSizeR,
-            forceRadialSorting=seedFinderConfigArg.forceRadialSorting,
             seedConfirmation=seedFinderConfigArg.seedConfirmation,
             centralSeedConfirmationRange=seedFinderConfigArg.centralSeedConfirmationRange,
             forwardSeedConfirmationRange=seedFinderConfigArg.forwardSeedConfirmationRange,
@@ -514,7 +579,6 @@ def addStandardSeeding(
             seedConfirmation=seedFilterConfigArg.seedConfirmation,
             centralSeedConfirmationRange=seedFinderConfig.centralSeedConfirmationRange,
             forwardSeedConfirmationRange=seedFinderConfig.forwardSeedConfirmationRange,
-            curvatureSortingInFilter=seedFilterConfigArg.curvatureSortingInFilter,
             maxSeedsPerSpMConf=seedFilterConfigArg.maxSeedsPerSpMConf,
             maxQualitySeedsPerSpMConf=seedFilterConfigArg.maxQualitySeedsPerSpMConf,
             useDeltaRorTopRadius=seedFilterConfigArg.useDeltaRorTopRadius,
@@ -555,7 +619,6 @@ def addStandardSeeding(
         level=logLevel,
         inputSpacePoints=[spacePoints],
         outputSeeds="seeds",
-        outputProtoTracks="prototracks",
         **acts.examples.defaultKWArgs(
             allowSeparateRMax=seedingAlgorithmConfigArg.allowSeparateRMax,
             zBinNeighborsTop=seedingAlgorithmConfigArg.zBinNeighborsTop,
@@ -569,7 +632,8 @@ def addStandardSeeding(
         seedFinderOptions=seedFinderOptions,
     )
     sequence.addAlgorithm(seedingAlg)
-    return seedingAlg.config.outputProtoTracks, seedingAlg.config.outputSeeds
+
+    return seedingAlg.config.outputSeeds
 
 
 def addOrthogonalSeeding(
@@ -612,12 +676,21 @@ def addOrthogonalSeeding(
             collisionRegionMax=seedFinderConfigArg.collisionRegion[1],
             zMin=seedFinderConfigArg.z[0],
             zMax=seedFinderConfigArg.z[1],
+            zOutermostLayers=(
+                seedFinderConfigArg.zOutermostLayers[0]
+                if seedFinderConfigArg.zOutermostLayers[0] is not None
+                else seedFinderConfigArg.z[0],
+                seedFinderConfigArg.zOutermostLayers[1]
+                if seedFinderConfigArg.zOutermostLayers[1] is not None
+                else seedFinderConfigArg.z[1],
+            ),
             maxSeedsPerSpM=seedFinderConfigArg.maxSeedsPerSpM,
             cotThetaMax=seedFinderConfigArg.cotThetaMax,
             sigmaScattering=seedFinderConfigArg.sigmaScattering,
             radLengthPerSeed=seedFinderConfigArg.radLengthPerSeed,
             minPt=seedFinderConfigArg.minPt,
             impactMax=seedFinderConfigArg.impactMax,
+            deltaPhiMax=seedFinderConfigArg.deltaPhiMax,
             interactionPointCut=seedFinderConfigArg.interactionPointCut,
             deltaZMax=seedFinderConfigArg.deltaZMax,
             maxPtScattering=seedFinderConfigArg.maxPtScattering,
@@ -653,7 +726,6 @@ def addOrthogonalSeeding(
             numSeedIncrement=seedFilterConfigArg.numSeedIncrement,
             seedWeightIncrement=seedFilterConfigArg.seedWeightIncrement,
             seedConfirmation=seedFilterConfigArg.seedConfirmation,
-            curvatureSortingInFilter=seedFilterConfigArg.curvatureSortingInFilter,
             maxSeedsPerSpMConf=seedFilterConfigArg.maxSeedsPerSpMConf,
             maxQualitySeedsPerSpMConf=seedFilterConfigArg.maxQualitySeedsPerSpMConf,
             useDeltaRorTopRadius=seedFilterConfigArg.useDeltaRorTopRadius,
@@ -663,23 +735,40 @@ def addOrthogonalSeeding(
         level=logLevel,
         inputSpacePoints=[spacePoints],
         outputSeeds="seeds",
-        outputProtoTracks="prototracks",
         seedFilterConfig=seedFilterConfig,
         seedFinderConfig=seedFinderConfig,
         seedFinderOptions=seedFinderOptions,
     )
     sequence.addAlgorithm(seedingAlg)
-    return seedingAlg.config.outputProtoTracks, seedingAlg.config.outputSeeds
+
+    return seedingAlg.config.outputSeeds
+
+
+def addHoughTransformSeeding(
+    sequence: acts.examples.Sequencer,
+    config: acts.examples.HoughTransformSeeder.Config,
+    logLevel: acts.logging.Level = None,
+):
+    """
+    Configures HoughTransform (HT) for seeding, instead of extra proxy config objects it takes
+    directly the HT example algorithm config.
+    """
+    logLevel = acts.examples.defaultLogging(sequence, logLevel)()
+    ht = acts.examples.HoughTransformSeeder(config=config, level=logLevel)
+    sequence.addAlgorithm(ht)
+    # potentially HT can be extended to also produce seeds, but it is not yet implemented yet
+    # configuration option (outputSeeds) exists
+    return ht.config.outputSeeds
 
 
 def addSeedPerformanceWriters(
     sequence: acts.examples.Sequencer,
     outputDirRoot: Union[Path, str],
-    inputProtoTracks: str,
+    seeds: str,
+    prototracks: str,
     selectedParticles: str,
     inputParticles: str,
     outputTrackParameters: str,
-    outputProtoTracks: str,
     logLevel: acts.logging.Level = None,
 ):
     """Writes seeding related performance output"""
@@ -687,23 +776,14 @@ def addSeedPerformanceWriters(
     outputDirRoot = Path(outputDirRoot)
     if not outputDirRoot.exists():
         outputDirRoot.mkdir()
-    sequence.addWriter(
-        acts.examples.TrackFinderPerformanceWriter(
-            level=customLogLevel(),
-            inputProtoTracks=inputProtoTracks,
-            inputParticles=selectedParticles,  # the original selected particles after digitization
-            inputMeasurementParticlesMap="measurement_particles_map",
-            filePath=str(outputDirRoot / "performance_seeding_trees.root"),
-        )
-    )
 
     sequence.addWriter(
         acts.examples.SeedingPerformanceWriter(
             level=customLogLevel(minLevel=acts.logging.DEBUG),
-            inputProtoTracks=inputProtoTracks,
+            inputSeeds=seeds,
             inputParticles=selectedParticles,
             inputMeasurementParticlesMap="measurement_particles_map",
-            filePath=str(outputDirRoot / "performance_seeding_hists.root"),
+            filePath=str(outputDirRoot / "performance_seeding.root"),
         )
     )
 
@@ -711,7 +791,7 @@ def addSeedPerformanceWriters(
         acts.examples.RootTrackParameterWriter(
             level=customLogLevel(),
             inputTrackParameters=outputTrackParameters,
-            inputProtoTracks=outputProtoTracks,
+            inputProtoTracks=prototracks,
             inputParticles=inputParticles,
             inputSimHits="simhits",
             inputMeasurementParticlesMap="measurement_particles_map",
@@ -726,40 +806,40 @@ def addKalmanTracks(
     s: acts.examples.Sequencer,
     trackingGeometry: acts.TrackingGeometry,
     field: acts.MagneticFieldProvider,
-    directNavigation=False,
-    reverseFilteringMomThreshold=0 * u.GeV,
+    directNavigation: bool = False,
+    reverseFilteringMomThreshold: float = 0 * u.GeV,
+    inputProtoTracks: str = "truth_particle_tracks",
+    multipleScattering: bool = True,
+    energyLoss: bool = True,
+    calibrationConfigFile: str = None,
+    clusters: str = None,
     logLevel: Optional[acts.logging.Level] = None,
 ) -> None:
-
     customLogLevel = acts.examples.defaultLogging(s, logLevel)
-
-    truthTrkFndAlg = acts.examples.TruthTrackFinder(
-        level=customLogLevel(),
-        inputParticles="truth_seeds_selected",
-        inputMeasurementParticlesMap="measurement_particles_map",
-        outputProtoTracks="prototracks",
-    )
-    s.addAlgorithm(truthTrkFndAlg)
 
     if directNavigation:
         srfSortAlg = acts.examples.SurfaceSortingAlgorithm(
             level=customLogLevel(),
-            inputProtoTracks="prototracks",
+            inputProtoTracks=inputProtoTracks,
             inputSimHits="simhits",
             inputMeasurementSimHitsMap="measurement_simhits_map",
-            outputProtoTracks="sortedprototracks",
+            outputProtoTracks="sorted_truth_particle_tracks",
         )
         s.addAlgorithm(srfSortAlg)
         inputProtoTracks = srfSortAlg.config.outputProtoTracks
-    else:
-        inputProtoTracks = "prototracks"
 
     kalmanOptions = {
-        "multipleScattering": True,
-        "energyLoss": True,
+        "multipleScattering": multipleScattering,
+        "energyLoss": energyLoss,
         "reverseFilteringMomThreshold": reverseFilteringMomThreshold,
         "freeToBoundCorrection": acts.examples.FreeToBoundCorrection(False),
+        "level": customLogLevel(),
     }
+
+    if calibrationConfigFile is None:
+        calibrator = acts.examples.makePassThroughCalibrator()
+    else:
+        calibrator = acts.examples.makeScalingCalibrator(calibrationConfigFile)
 
     fitAlg = acts.examples.TrackFittingAlgorithm(
         level=customLogLevel(),
@@ -767,17 +847,24 @@ def addKalmanTracks(
         inputSourceLinks="sourcelinks",
         inputProtoTracks=inputProtoTracks,
         inputInitialTrackParameters="estimatedparameters",
-        outputTrajectories="kfTrajectories",
-        directNavigation=directNavigation,
+        inputClusters=clusters if clusters is not None else "",
+        outputTracks="kfTracks",
         pickTrack=-1,
-        trackingGeometry=trackingGeometry,
         fit=acts.examples.makeKalmanFitterFunction(
             trackingGeometry, field, **kalmanOptions
         ),
+        calibrator=calibrator,
     )
     s.addAlgorithm(fitAlg)
+    s.addWhiteboardAlias("tracks", fitAlg.config.outputTracks)
 
-    s.addWhiteboardAlias("trajectories", fitAlg.config.outputTrajectories)
+    trackConverter = acts.examples.TracksToTrajectories(
+        level=customLogLevel(),
+        inputTracks=fitAlg.config.outputTracks,
+        outputTrajectories="kfTrajectories",
+    )
+    s.addAlgorithm(trackConverter)
+    s.addWhiteboardAlias("trajectories", trackConverter.config.outputTrajectories)
 
     return s
 
@@ -786,9 +873,9 @@ def addTruthTrackingGsf(
     s: acts.examples.Sequencer,
     trackingGeometry: acts.TrackingGeometry,
     field: acts.MagneticFieldProvider,
+    inputProtoTracks: str = "truth_particle_tracks",
     logLevel: Optional[acts.logging.Level] = None,
 ) -> None:
-
     customLogLevel = acts.examples.defaultLogging(s, logLevel)
 
     gsfOptions = {
@@ -805,31 +892,33 @@ def addTruthTrackingGsf(
         level=customLogLevel(),
         inputMeasurements="measurements",
         inputSourceLinks="sourcelinks",
-        inputProtoTracks="prototracks",
+        inputProtoTracks=inputProtoTracks,
         inputInitialTrackParameters="estimatedparameters",
-        outputTrajectories="gsf_trajectories",
-        directNavigation=False,
+        outputTracks="gsf_tracks",
         pickTrack=-1,
-        trackingGeometry=trackingGeometry,
         fit=acts.examples.makeGsfFitterFunction(trackingGeometry, field, **gsfOptions),
+        calibrator=acts.examples.makePassThroughCalibrator(),
     )
-
     s.addAlgorithm(gsfAlg)
+
+    trackConverter = acts.examples.TracksToTrajectories(
+        level=customLogLevel(),
+        inputTracks=gsfAlg.config.outputTracks,
+        outputTrajectories="gsf_trajectories",
+    )
+    s.addAlgorithm(trackConverter)
 
     return s
 
 
 @acts.examples.NamedTypeArgs(
-    ckfPerformanceConfig=CKFPerformanceConfig,
-    trackSelectorRanges=TrackSelectorRanges,
+    trackSelectorConfig=TrackSelectorConfig,
 )
 def addCKFTracks(
     s: acts.examples.Sequencer,
     trackingGeometry: acts.TrackingGeometry,
     field: acts.MagneticFieldProvider,
-    trackSelectorRanges: Optional[TrackSelectorRanges] = None,
-    selectedParticles: str = "truth_seeds_selected",
-    ckfPerformanceConfig: CKFPerformanceConfig = CKFPerformanceConfig(),
+    trackSelectorConfig: Optional[TrackSelectorConfig] = None,
     outputDirCsv: Optional[Union[Path, str]] = None,
     outputDirRoot: Optional[Union[Path, str]] = None,
     writeTrajectories: bool = True,
@@ -843,16 +932,11 @@ def addCKFTracks(
         the sequencer module to which we add the Seeding steps (returned from addSeeding)
     trackingGeometry : tracking geometry
     field : magnetic field
-    ckfPerformanceConfigArg : CKFPerformanceConfig(truthMatchProbMin, nMeasurementsMin, ptMin)
-        CKFPerformanceWriter configuration.
-        Defaults specified in Examples/Io/Performance/ActsExamples/Io/Performance/CKFPerformanceWriter.hpp
     outputDirCsv : Path|str, path, None
         the output folder for the Csv output, None triggers no output
     outputDirRoot : Path|str, path, None
         the output folder for the Root output, None triggers no output
-    selectedParticles : str, "truth_seeds_selected"
-        CKFPerformanceWriter truth input
-    trackSelectorRanges : TrackSelectorRanges(loc0, loc1, time, eta, absEta, pt, phi, removeNeutral, removeCharged)
+    trackSelectorConfig : TrackSelectorConfig(loc0, loc1, time, eta, absEta, pt, phi, minMeasurements)
         TrackSelector configuration. Each range is specified as a tuple of (min,max).
         Defaults of no cuts specified in Examples/Algorithms/TruthTracking/ActsExamples/TruthTracking/TrackSelector.hpp
     writeTrajectories : bool, True
@@ -872,31 +956,46 @@ def addCKFTracks(
         inputMeasurements="measurements",
         inputSourceLinks="sourcelinks",
         inputInitialTrackParameters="estimatedparameters",
-        outputTrajectories="ckfTrajectories",
+        outputTracks="ckfTracks",
         findTracks=acts.examples.TrackFindingAlgorithm.makeTrackFinderFunction(
-            trackingGeometry, field
+            trackingGeometry, field, customLogLevel()
         ),
     )
     s.addAlgorithm(trackFinder)
+    s.addWhiteboardAlias("tracks", trackFinder.config.outputTracks)
 
-    s.addWhiteboardAlias("trajectories", trackFinder.config.outputTrajectories)
+    trackConverter = acts.examples.TracksToTrajectories(
+        level=customLogLevel(),
+        inputTracks=trackFinder.config.outputTracks,
+        outputTrajectories="trajectories-from-tracks",
+    )
+    s.addAlgorithm(trackConverter)
+    s.addWhiteboardAlias("trajectories", trackConverter.config.outputTrajectories)
 
-    if trackSelectorRanges is not None:
+    if trackSelectorConfig is not None:
         trackSelector = addTrackSelection(
             s,
-            trackSelectorRanges,
-            inputTrajectories=trackFinder.config.outputTrajectories,
-            outputTrajectories="selectedTrajectories",
+            trackSelectorConfig,
+            inputTracks=trackFinder.config.outputTracks,
+            outputTracks="selectedTracks",
             logLevel=customLogLevel(),
         )
+        s.addWhiteboardAlias("tracks", trackSelector.config.outputTracks)
 
-        s.addWhiteboardAlias("trajectories", trackSelector.config.outputTrajectories)
+        selectedTrackConverter = acts.examples.TracksToTrajectories(
+            level=customLogLevel(),
+            inputTracks=trackSelector.config.outputTracks,
+            outputTrajectories="trajectories-from-selected-tracks",
+        )
+        s.addAlgorithm(selectedTrackConverter)
+        s.addWhiteboardAlias(
+            "trajectories", selectedTrackConverter.config.outputTrajectories
+        )
 
     addTrajectoryWriters(
         s,
         name="ckf",
-        trajectories=trackFinder.config.outputTrajectories,
-        ckfPerformanceConfig=ckfPerformanceConfig,
+        trajectories="trajectories",
         outputDirCsv=outputDirCsv,
         outputDirRoot=outputDirRoot,
         writeStates=writeTrajectories,
@@ -910,15 +1009,10 @@ def addCKFTracks(
     return s
 
 
-@acts.examples.NamedTypeArgs(
-    ckfPerformanceConfig=CKFPerformanceConfig,
-    trackSelectorRanges=TrackSelectorRanges,
-)
 def addTrajectoryWriters(
     s: acts.examples.Sequencer,
     name: str,
     trajectories: str = "trajectories",
-    ckfPerformanceConfig: CKFPerformanceConfig = CKFPerformanceConfig(),
     outputDirCsv: Optional[Union[Path, str]] = None,
     outputDirRoot: Optional[Union[Path, str]] = None,
     writeStates: bool = True,
@@ -942,7 +1036,7 @@ def addTrajectoryWriters(
                 inputTrajectories=trajectories,
                 # @note The full particles collection is used here to avoid lots of warnings
                 # since the unselected CKF track might have a majority particle not in the
-                # filtered particle collection. This could be avoided when a seperate track
+                # filtered particle collection. This could be avoided when a separate track
                 # selection algorithm is used.
                 inputParticles="particles_selected",
                 inputSimHits="simhits",
@@ -960,7 +1054,7 @@ def addTrajectoryWriters(
                 inputTrajectories=trajectories,
                 # @note The full particles collection is used here to avoid lots of warnings
                 # since the unselected CKF track might have a majority particle not in the
-                # filtered particle collection. This could be avoided when a seperate track
+                # filtered particle collection. This could be avoided when a separate track
                 # selection algorithm is used.
                 inputParticles="particles_selected",
                 inputMeasurementParticlesMap="measurement_particles_map",
@@ -976,12 +1070,6 @@ def addTrajectoryWriters(
                 inputParticles="truth_seeds_selected",
                 inputTrajectories=trajectories,
                 inputMeasurementParticlesMap="measurement_particles_map",
-                **acts.examples.defaultKWArgs(
-                    # The bottom seed could be the first, second or third hits on the truth track
-                    nMeasurementsMin=ckfPerformanceConfig.nMeasurementsMin,
-                    ptMin=ckfPerformanceConfig.ptMin,
-                    truthMatchProbMin=ckfPerformanceConfig.truthMatchProbMin,
-                ),
                 filePath=str(outputDirRoot / f"performance_{name}.root"),
             )
             s.addWriter(ckfPerfWriter)
@@ -1003,8 +1091,8 @@ def addTrajectoryWriters(
             s.addWriter(
                 acts.examples.TrackFitterPerformanceWriter(
                     level=acts.logging.INFO,
-                    inputTrajectories="trajectories",
                     inputParticles="truth_seeds_selected",
+                    inputTrajectories="trajectories",
                     inputMeasurementParticlesMap="measurement_particles_map",
                     filePath=str(
                         outputDirRoot / f"performance_track_fitter_{name}.root"
@@ -1023,52 +1111,43 @@ def addTrajectoryWriters(
                 inputTrajectories=trajectories,
                 inputMeasurementParticlesMap="measurement_particles_map",
                 outputDir=str(outputDirCsv),
+                fileName=str(f"tracks_{name}.csv"),
             )
             s.addWriter(csvMTJWriter)
 
 
 @acts.examples.NamedTypeArgs(
-    trackSelectorRanges=TrackSelectorRanges,
+    trackSelectorConfig=TrackSelectorConfig,
 )
 def addTrackSelection(
     s: acts.examples.Sequencer,
-    trackSelectorRanges: TrackSelectorRanges,
-    inputTrackParameters: Optional[str] = None,
-    inputTrajectories: Optional[str] = None,
-    outputTrackParameters: Optional[str] = None,
-    outputTrajectories: Optional[str] = None,
+    trackSelectorConfig: TrackSelectorConfig,
+    inputTracks: str,
+    outputTracks: str,
     logLevel: Optional[acts.logging.Level] = None,
 ) -> acts.examples.TrackSelector:
-
     customLogLevel = acts.examples.defaultLogging(s, logLevel)
 
     trackSelector = acts.examples.TrackSelector(
         level=customLogLevel(),
-        inputTrackParameters=inputTrackParameters
-        if inputTrackParameters is not None
-        else "",
-        inputTrajectories=inputTrajectories if inputTrajectories is not None else "",
-        outputTrackParameters=outputTrackParameters
-        if outputTrackParameters is not None
-        else "",
-        outputTrajectories=outputTrajectories if outputTrajectories is not None else "",
+        inputTracks=inputTracks,
+        outputTracks=outputTracks,
         **acts.examples.defaultKWArgs(
-            loc0Min=trackSelectorRanges.loc0[0],
-            loc0Max=trackSelectorRanges.loc0[1],
-            loc1Min=trackSelectorRanges.loc1[0],
-            loc1Max=trackSelectorRanges.loc1[1],
-            timeMin=trackSelectorRanges.time[0],
-            timeMax=trackSelectorRanges.time[1],
-            phiMin=trackSelectorRanges.phi[0],
-            phiMax=trackSelectorRanges.phi[1],
-            etaMin=trackSelectorRanges.eta[0],
-            etaMax=trackSelectorRanges.eta[1],
-            absEtaMin=trackSelectorRanges.absEta[0],
-            absEtaMax=trackSelectorRanges.absEta[1],
-            ptMin=trackSelectorRanges.pt[0],
-            ptMax=trackSelectorRanges.pt[1],
-            removeCharged=trackSelectorRanges.removeCharged,
-            removeNeutral=trackSelectorRanges.removeNeutral,
+            loc0Min=trackSelectorConfig.loc0[0],
+            loc0Max=trackSelectorConfig.loc0[1],
+            loc1Min=trackSelectorConfig.loc1[0],
+            loc1Max=trackSelectorConfig.loc1[1],
+            timeMin=trackSelectorConfig.time[0],
+            timeMax=trackSelectorConfig.time[1],
+            phiMin=trackSelectorConfig.phi[0],
+            phiMax=trackSelectorConfig.phi[1],
+            etaMin=trackSelectorConfig.eta[0],
+            etaMax=trackSelectorConfig.eta[1],
+            absEtaMin=trackSelectorConfig.absEta[0],
+            absEtaMax=trackSelectorConfig.absEta[1],
+            ptMin=trackSelectorConfig.pt[0],
+            ptMax=trackSelectorConfig.pt[1],
+            minMeasurements=trackSelectorConfig.nMeasurementsMin,
         ),
     )
 
@@ -1089,7 +1168,6 @@ def addExaTrkX(
     backend: Optional[ExaTrkXBackend] = ExaTrkXBackend.Torch,
     logLevel: Optional[acts.logging.Level] = None,
 ) -> None:
-
     customLogLevel = acts.examples.defaultLogging(s, logLevel)
 
     # Run the particle selection
@@ -1121,28 +1199,51 @@ def addExaTrkX(
         )
     )
 
-    # For now we don't configure only the common options so this works
-    exaTrkxModule = (
-        acts.examples.ExaTrkXTrackFindingTorch
-        if backend == ExaTrkXBackend.Torch
-        else acts.examples.ExaTrkXTrackFindingOnnx
-    )
+    metricLearningConfig = {
+        "spacepointFeatures": 3,
+        "embeddingDim": 8,
+        "rVal": 1.6,
+        "knnVal": 500,
+    }
 
-    exaTrkxFinding = exaTrkxModule(
-        modelDir=str(modelDir),
-        spacepointFeatures=3,
-        embeddingDim=8,
-        rVal=1.6,
-        knnVal=500,
-        filterCut=0.21,
-    )
+    filterConfig = {"cut": 0.21}
+
+    gnnConfig = {
+        "cut": 0.5,
+    }
+
+    if backend == ExaTrkXBackend.Torch:
+        metricLearningConfig["modelPath"] = str(modelDir / "embed.pt")
+        filterConfig["modelPath"] = str(modelDir / "filter.pt")
+        filterConfig["nChunks"] = 10
+        gnnConfig["modelPath"] = str(modelDir / "gnn.pt")
+
+        graphConstructor = acts.examples.TorchMetricLearning(**metricLearningConfig)
+        edgeClassifiers = [
+            acts.examples.TorchEdgeClassifier(**filterConfig),
+            acts.examples.TorchEdgeClassifier(**gnnConfig),
+        ]
+        trackBuilder = acts.examples.BoostTrackBuilding()
+    elif backend == ExaTrkXBackend.Onnx:
+        metricLearningConfig["modelPath"] = str(modelDir / "embedding.onnx")
+        filterConfig["modelPath"] = str(modelDir / "filtering.onnx")
+        gnnConfig["modelPath"] = str(modelDir / "gnn.onnx")
+
+        graphConstructor = acts.examples.OnnxMetricLearning(**metricLearningConfig)
+        edgeClassifiers = [
+            acts.examples.OnnxEdgeClassifier(**filterConfig),
+            acts.examples.OnnxEdgeClassifier(**gnnConfig),
+        ]
+        trackBuilder = acts.examples.CugraphTrackBuilding()
 
     s.addAlgorithm(
         acts.examples.TrackFindingAlgorithmExaTrkX(
             level=customLogLevel(),
             inputSpacePoints="spacepoints",
             outputProtoTracks="protoTracks",
-            trackFinderML=exaTrkxFinding,
+            graphConstructor=graphConstructor,
+            edgeClassifiers=edgeClassifiers,
+            trackBuilder=trackBuilder,
         )
     )
 
@@ -1154,7 +1255,7 @@ def addExaTrkX(
                 inputProtoTracks="protoTracks",
                 inputParticles="particles_initial",  # the original selected particles after digitization
                 inputMeasurementParticlesMap="measurement_particles_map",
-                filePath=str(Path(outputDirRoot) / "performance_seeding_trees.root"),
+                filePath=str(Path(outputDirRoot) / "performance_track_finding.root"),
             )
         )
 
@@ -1163,41 +1264,43 @@ def addExaTrkX(
 
 @acts.examples.NamedTypeArgs(
     config=AmbiguityResolutionConfig,
-    ckfPerformanceConfig=CKFPerformanceConfig,
 )
 def addAmbiguityResolution(
     s,
     config: AmbiguityResolutionConfig = AmbiguityResolutionConfig(),
-    selectedParticles: str = "truth_seeds_selected",
-    ckfPerformanceConfig: CKFPerformanceConfig = CKFPerformanceConfig(),
     outputDirCsv: Optional[Union[Path, str]] = None,
     outputDirRoot: Optional[Union[Path, str]] = None,
     writeTrajectories: bool = True,
     logLevel: Optional[acts.logging.Level] = None,
 ) -> None:
-
-    from acts.examples import AmbiguityResolutionAlgorithm
+    from acts.examples import GreedyAmbiguityResolutionAlgorithm
 
     customLogLevel = acts.examples.defaultLogging(s, logLevel)
 
-    alg = AmbiguityResolutionAlgorithm(
+    alg = GreedyAmbiguityResolutionAlgorithm(
         level=customLogLevel(),
-        inputSourceLinks="sourcelinks",
-        inputTrajectories="trajectories",
-        outputTrajectories="filteredTrajectories",
+        inputTracks="tracks",
+        outputTracks="filteredTrajectories",
         **acts.examples.defaultKWArgs(
             maximumSharedHits=config.maximumSharedHits,
+            nMeasurementsMin=config.nMeasurementsMin,
+            maximumIterations=config.maximumIterations,
         ),
     )
     s.addAlgorithm(alg)
 
-    s.addWhiteboardAlias("trajectories", alg.config.outputTrajectories)
+    trackConverter = acts.examples.TracksToTrajectories(
+        level=customLogLevel(),
+        inputTracks=alg.config.outputTracks,
+        outputTrajectories="trajectories-from-solved-tracks",
+    )
+    s.addAlgorithm(trackConverter)
+    s.addWhiteboardAlias("trajectories", trackConverter.config.outputTrajectories)
 
     addTrajectoryWriters(
         s,
         name="ambi",
-        trajectories=alg.config.outputTrajectories,
-        ckfPerformanceConfig=ckfPerformanceConfig,
+        trajectories="trajectories",
         outputDirCsv=outputDirCsv,
         outputDirRoot=outputDirRoot,
         writeStates=writeTrajectories,
@@ -1212,20 +1315,127 @@ def addAmbiguityResolution(
 
 
 @acts.examples.NamedTypeArgs(
-    trackSelectorRanges=TrackSelectorRanges,
+    config=AmbiguityResolutionMLConfig,
+)
+def addAmbiguityResolutionML(
+    s,
+    config: AmbiguityResolutionMLConfig = AmbiguityResolutionMLConfig(),
+    onnxModelFile: Optional[Union[Path, str]] = None,
+    outputDirCsv: Optional[Union[Path, str]] = None,
+    outputDirRoot: Optional[Union[Path, str]] = None,
+    writeTrajectories: bool = True,
+    logLevel: Optional[acts.logging.Level] = None,
+) -> None:
+    from acts.examples.onnx import AmbiguityResolutionMLAlgorithm
+
+    customLogLevel = acts.examples.defaultLogging(s, logLevel)
+
+    alg = AmbiguityResolutionMLAlgorithm(
+        level=customLogLevel(),
+        inputTracks="tracks",
+        inputDuplicateNN=onnxModelFile,
+        outputTracks="filteredTrajectoriesML",
+        **acts.examples.defaultKWArgs(
+            nMeasurementsMin=config.nMeasurementsMin,
+        ),
+    )
+    s.addAlgorithm(alg)
+
+    trackConverter = acts.examples.TracksToTrajectories(
+        level=customLogLevel(),
+        inputTracks=alg.config.outputTracks,
+        outputTrajectories="trajectories-from-solved-tracks",
+    )
+    s.addAlgorithm(trackConverter)
+    s.addWhiteboardAlias("trajectories", trackConverter.config.outputTrajectories)
+
+    addTrajectoryWriters(
+        s,
+        name="ambiML",
+        trajectories="trajectories",
+        outputDirCsv=outputDirCsv,
+        outputDirRoot=outputDirRoot,
+        writeStates=writeTrajectories,
+        writeSummary=writeTrajectories,
+        writeCKFperformance=True,
+        writeFinderPerformance=False,
+        writeFitterPerformance=False,
+        logLevel=logLevel,
+    )
+
+    return s
+
+
+@acts.examples.NamedTypeArgs(
+    config=AmbiguityResolutionMLDBScanConfig,
+)
+def addAmbiguityResolutionMLDBScan(
+    s,
+    config: AmbiguityResolutionMLDBScanConfig = AmbiguityResolutionMLDBScanConfig(),
+    onnxModelFile: Optional[Union[Path, str]] = None,
+    outputDirCsv: Optional[Union[Path, str]] = None,
+    outputDirRoot: Optional[Union[Path, str]] = None,
+    writeTrajectories: bool = True,
+    logLevel: Optional[acts.logging.Level] = None,
+) -> None:
+    from acts.examples import AmbiguityResolutionMLDBScanAlgorithm
+
+    customLogLevel = acts.examples.defaultLogging(s, logLevel)
+
+    alg = AmbiguityResolutionMLDBScanAlgorithm(
+        level=customLogLevel(),
+        inputTracks="tracks",
+        inputDuplicateNN=onnxModelFile,
+        outputTracks="filteredTrajectoriesMLDBScan",
+        **acts.examples.defaultKWArgs(
+            nMeasurementsMin=config.nMeasurementsMin,
+            epsilonDBScan=config.epsilonDBScan,
+            minPointsDBScan=config.minPointsDBScan,
+        ),
+    )
+    s.addAlgorithm(alg)
+
+    trackConverter = acts.examples.TracksToTrajectories(
+        level=customLogLevel(),
+        inputTracks=alg.config.outputTracks,
+        outputTrajectories="trajectories-from-solved-tracks",
+    )
+    s.addAlgorithm(trackConverter)
+    s.addWhiteboardAlias("trajectories", trackConverter.config.outputTrajectories)
+
+    addTrajectoryWriters(
+        s,
+        name="ambiMLDBScan",
+        trajectories="trajectories",
+        outputDirCsv=outputDirCsv,
+        outputDirRoot=outputDirRoot,
+        writeStates=writeTrajectories,
+        writeSummary=writeTrajectories,
+        writeCKFperformance=True,
+        writeFinderPerformance=False,
+        writeFitterPerformance=False,
+        logLevel=logLevel,
+    )
+
+    return s
+
+
+@acts.examples.NamedTypeArgs(
+    trackSelectorConfig=TrackSelectorConfig,
 )
 def addVertexFitting(
     s,
     field,
-    outputDirRoot: Optional[Union[Path, str]] = None,
     trajectories: Optional[str] = "trajectories",
     trackParameters: Optional[str] = None,
     associatedParticles: Optional[str] = None,
+    outputProtoVertices: str = "protovertices",
+    outputVertices: str = "fittedVertices",
     vertexFinder: VertexFinder = VertexFinder.Truth,
-    trackSelectorRanges: Optional[TrackSelectorRanges] = None,
+    trackSelectorConfig: Optional[TrackSelectorConfig] = None,
+    outputDirRoot: Optional[Union[Path, str]] = None,
     logLevel: Optional[acts.logging.Level] = None,
 ) -> None:
-
     """This function steers the vertex fitting
 
     Parameters
@@ -1236,7 +1446,7 @@ def addVertexFitting(
     outputDirRoot : Path|str, path, None
         the output folder for the Root output, None triggers no output
     associatedParticles : str, "associatedTruthParticles"
-        RootVertexPerformanceWriter.inputAssociatedTruthParticles
+        VertexPerformanceWriter.inputAssociatedTruthParticles
     vertexFinder : VertexFinder, Truth
         vertexFinder algorithm: one of Truth, AMVF, Iterative
     logLevel : acts.logging.Level, None
@@ -1247,7 +1457,7 @@ def addVertexFitting(
         VertexFitterAlgorithm,
         IterativeVertexFinderAlgorithm,
         AdaptiveMultiVertexFinderAlgorithm,
-        RootVertexPerformanceWriter,
+        VertexPerformanceWriter,
     )
 
     trajectories = trajectories if trajectories is not None else ""
@@ -1256,12 +1466,11 @@ def addVertexFitting(
 
     customLogLevel = acts.examples.defaultLogging(s, logLevel)
 
-    if trackSelectorRanges is not None:
+    if trackSelectorConfig is not None:
 
-        print("PF::Running the track selector=")
         trackSelector = addTrackSelection(
             s,
-            trackSelectorRanges,
+            trackSelectorConfig,
             inputTrackParameters=trackParameters,
             inputTrajectories=trajectories,
             outputTrackParameters="selectedTrackParametersVertexing",
@@ -1276,20 +1485,12 @@ def addVertexFitting(
 
     inputParticles = "particles_input"
     selectedParticles = "particles_selected"
-    outputVertices = "fittedVertices"
 
-    print("PF::VertexTrajectories=",trajectories)
-    print("PF::trackParameters=",trackParameters)
-
-
-
-    
-    outputTime = ""
     if vertexFinder == VertexFinder.Truth:
         findVertices = TruthVertexFinder(
             level=customLogLevel(),
             inputParticles=selectedParticles,
-            outputProtoVertices="protovertices",
+            outputProtoVertices=outputProtoVertices,
             excludeSecondaries=True,
         )
         s.addAlgorithm(findVertices)
@@ -1308,20 +1509,18 @@ def addVertexFitting(
             bField=field,
             inputTrajectories=trajectories,
             inputTrackParameters=trackParameters,
-            outputProtoVertices="protovertices",
+            outputProtoVertices=outputProtoVertices,
             outputVertices=outputVertices,
         )
         s.addAlgorithm(findVertices)
     elif vertexFinder == VertexFinder.AMVF:
-        outputTime = "outputTime"
         findVertices = AdaptiveMultiVertexFinderAlgorithm(
             level=customLogLevel(),
             bField=field,
             inputTrajectories=trajectories,
             inputTrackParameters=trackParameters,
-            outputProtoVertices="protovertices",
+            outputProtoVertices=outputProtoVertices,
             outputVertices=outputVertices,
-            outputTime=outputTime,
         )
         s.addAlgorithm(findVertices)
     else:
@@ -1333,11 +1532,11 @@ def addVertexFitting(
             outputDirRoot.mkdir()
         if associatedParticles == selectedParticles:
             warnings.warn(
-                "Using RootVertexPerformanceWriter with smeared particles is not necessarily supported. "
+                "Using VertexPerformanceWriter with smeared particles is not necessarily supported. "
                 "Please get in touch with us"
             )
         s.addWriter(
-            RootVertexPerformanceWriter(
+            VertexPerformanceWriter(
                 level=customLogLevel(),
                 inputAllTruthParticles=inputParticles,
                 inputSelectedTruthParticles=selectedParticles,
@@ -1347,7 +1546,6 @@ def addVertexFitting(
                 inputAssociatedTruthParticles=associatedParticles,
                 inputVertices=outputVertices,
                 minTrackVtxMatchFraction=0.5 if associatedParticles else 0.0,
-                inputTime=outputTime,
                 treeName="vertexing",
                 filePath=str(outputDirRoot / "performance_vertexing.root"),
             )

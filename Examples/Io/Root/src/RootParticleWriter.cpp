@@ -9,9 +9,14 @@
 #include "ActsExamples/Io/Root/RootParticleWriter.hpp"
 
 #include "Acts/Definitions/Units.hpp"
-#include "Acts/Utilities/Helpers.hpp"
+#include "Acts/Utilities/VectorHelpers.hpp"
+#include "ActsExamples/Framework/AlgorithmContext.hpp"
+#include "ActsFatras/EventData/Barcode.hpp"
+#include "ActsFatras/EventData/Particle.hpp"
 
+#include <algorithm>
 #include <ios>
+#include <ostream>
 #include <stdexcept>
 
 #include <TFile.h>
@@ -71,7 +76,7 @@ ActsExamples::RootParticleWriter::~RootParticleWriter() {
   }
 }
 
-ActsExamples::ProcessCode ActsExamples::RootParticleWriter::endRun() {
+ActsExamples::ProcessCode ActsExamples::RootParticleWriter::finalize() {
   m_outputFile->cd();
   m_outputTree->Write();
   m_outputFile->Close();

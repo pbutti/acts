@@ -73,7 +73,7 @@ using step_size_t = decltype(std::declval<T>().stepSize);
     constexpr bool StepperStateConcept
       = require<has_member<S, cov_transport_t, bool>,
                 has_member<S, cov_t, BoundSymMatrix>,
-                has_member<S, nav_dir_t, NavigationDirection>,
+                has_member<S, nav_dir_t, Direction>,
                 has_member<S, path_accumulated_t, double>//,
 //                 has_member<S, step_size_t, ConstrainedStep>
                >;
@@ -83,7 +83,7 @@ using step_size_t = decltype(std::declval<T>().stepSize);
 template <typename S>
 constexpr bool MultiStepperStateConcept= require<
   has_member<S, cov_transport_t, bool>,
-  has_member<S, nav_dir_t, NavigationDirection>,
+  has_member<S, nav_dir_t, Direction>,
   has_member<S, path_accumulated_t, double>
 >;
 // clang-format on
@@ -101,7 +101,7 @@ constexpr bool MultiStepperStateConcept= require<
         static_assert(bound_state_exists, "BoundState type not found");
         constexpr static bool curvilinear_state_exists = exists<curvilinear_state_t, S>;
         static_assert(curvilinear_state_exists, "CurvilinearState type not found");
-        constexpr static bool reset_state_exists = has_method<const S, void, reset_state_t, state&, const BoundVector&, const BoundSymMatrix&, const Surface&, const NavigationDirection, const double>;
+        constexpr static bool reset_state_exists = has_method<const S, void, reset_state_t, state&, const BoundVector&, const BoundSymMatrix&, const Surface&, const Direction, const double>;
         static_assert(reset_state_exists, "resetState method not found");
         constexpr static bool position_exists = has_method<const S, Vector3, position_t, const state&>;
         static_assert(position_exists, "position method not found");
@@ -159,7 +159,7 @@ constexpr bool MultiStepperStateConcept= require<
     template <typename S, typename state = typename S::State>
       struct SingleStepperConcept {
         constexpr static bool common_stepper_concept_fullfilled = CommonStepperConcept<S, state>::value;
-        static_assert(common_stepper_concept_fullfilled, "Stepper does not fullfill common stepper concept");
+        static_assert(common_stepper_concept_fullfilled, "Stepper does not fulfill common stepper concept");
         constexpr static bool update_method_exists = require<has_method<const S, void, update_t, state&, const FreeVector&, const BoundVector&, const BoundSymMatrix&, const Surface&>, has_method<const S, void, update_t, state&, const Vector3&, const Vector3&, double, double>>;
         // static_assert(update_method_exists, "update method not found");
         constexpr static bool get_field_exists = has_method<const S, Result<Vector3>, get_field_t, state&, const Vector3&>;
@@ -175,14 +175,14 @@ constexpr bool MultiStepperStateConcept= require<
     template <typename S, typename state = typename S::State>
       struct MultiStepperConcept {
         constexpr static bool common_stepper_concept_fullfilled = CommonStepperConcept<S, state>::value;
-        static_assert(common_stepper_concept_fullfilled, "Common stepper concept not fullfilled");
+        static_assert(common_stepper_concept_fullfilled, "Common stepper concept not fulfilled");
 
-        // TODO for now we do not check if the ComponentProxy does fullfill a concept
+        // TODO for now we do not check if the ComponentProxy does fulfill a concept
         template <typename T> using component_proxy_t = typename T::ComponentProxy;
         constexpr static bool component_proxy_exists = exists<component_proxy_t, S>;
         // static_assert(component_proxy_exists, "!component_proxy_exists");
 
-        // TODO for now we do not check if the ConstComponentProxy does fullfill a concept
+        // TODO for now we do not check if the ConstComponentProxy does fulfill a concept
         template <typename T> using const_component_proxy_t = typename T::ConstComponentProxy;
         constexpr static bool const_component_proxy_exists = exists<const_component_proxy_t, S>;
         // static_assert(const_component_proxy_exists, "!const_component_proxy_exists");

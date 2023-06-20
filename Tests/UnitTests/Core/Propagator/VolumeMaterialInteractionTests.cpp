@@ -8,13 +8,18 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include "Acts/Definitions/Algebra.hpp"
+#include "Acts/Definitions/Direction.hpp"
 #include "Acts/Definitions/Units.hpp"
 #include "Acts/Geometry/CuboidVolumeBounds.hpp"
 #include "Acts/Geometry/TrackingVolume.hpp"
 #include "Acts/Material/HomogeneousVolumeMaterial.hpp"
+#include "Acts/Material/MaterialSlab.hpp"
 #include "Acts/Propagator/detail/VolumeMaterialInteraction.hpp"
 #include "Acts/Tests/CommonHelpers/FloatComparisons.hpp"
 #include "Acts/Tests/CommonHelpers/PredefinedMaterials.hpp"
+
+#include <memory>
 
 namespace tt = boost::test_tools;
 using namespace Acts::UnitLiterals;
@@ -27,7 +32,12 @@ struct StepperState {
   Vector3 pos, dir;
   double t = 0, p = 0, q = 0;
   bool covTransport = false;
-  NavigationDirection navDir = NavigationDirection::Forward;
+  Direction navDir = Direction::Forward;
+};
+
+/// @brief Simplified navigator
+struct NaivgatorState {
+  TrackingVolume* currentVolume = nullptr;
 };
 
 /// @brief Simplified propgator state
@@ -37,11 +47,8 @@ struct State {
     int absPdgCode = 0;
   } options;
 
-  struct {
-    TrackingVolume* currentVolume = nullptr;
-  } navigation;
-
   StepperState stepping;
+  NaivgatorState navigation;
 };
 
 /// @brief Simplified stepper
@@ -54,9 +61,18 @@ struct Stepper {
 
   Vector3 direction(const StepperState& state) const { return state.dir; }
 
+  double qop(const StepperState& state) const { return state.q / state.p; }
+
   double momentum(const StepperState& state) const { return state.p; }
 
   double charge(const StepperState& state) const { return state.q; };
+};
+
+/// @brief Simplified navigator
+struct Navigator {
+  const TrackingVolume* currentVolume(const NaivgatorState& state) const {
+    return state.currentVolume;
+  }
 };
 
 BOOST_AUTO_TEST_CASE(volume_material_interaction_test) {
@@ -75,30 +91,31 @@ BOOST_AUTO_TEST_CASE(volume_material_interaction_test) {
   state.stepping.p = 8.;
   state.stepping.q = 9.;
   state.stepping.covTransport = true;
-  state.stepping.navDir = NavigationDirection::Backward;
+  state.stepping.navDir = Direction::Backward;
   state.options.mass = 10.;
   state.options.absPdgCode = 11;
   state.navigation.currentVolume = volume.get();
 
   Stepper stepper;
+  Navigator navigator;
 
   // Build the VolumeMaterialInteraction & test assignments
   detail::VolumeMaterialInteraction volMatInt(volume.get(), state, stepper);
   BOOST_CHECK_EQUAL(volMatInt.volume, volume.get());
-  BOOST_CHECK_EQUAL(volMatInt.pos, state.stepping.pos);
-  BOOST_CHECK_EQUAL(volMatInt.time, state.stepping.t);
-  BOOST_CHECK_EQUAL(volMatInt.dir, state.stepping.dir);
-  BOOST_CHECK_EQUAL(volMatInt.momentum, state.stepping.p);
-  BOOST_CHECK_EQUAL(volMatInt.q, state.stepping.q);
-  CHECK_CLOSE_ABS(volMatInt.qOverP, state.stepping.q / state.stepping.p, 1e-6);
+  BOOST_CHECK_EQUAL(volMatInt.pos, stepper.position(state.stepping));
+  BOOST_CHECK_EQUAL(volMatInt.time, stepper.time(state.stepping));
+  BOOST_CHECK_EQUAL(volMatInt.dir, stepper.direction(state.stepping));
+  BOOST_CHECK_EQUAL(volMatInt.momentum, stepper.momentum(state.stepping));
+  BOOST_CHECK_EQUAL(volMatInt.absQ, std::abs(stepper.charge(state.stepping)));
+  CHECK_CLOSE_ABS(volMatInt.qOverP, stepper.qop(state.stepping), 1e-6);
   BOOST_CHECK_EQUAL(volMatInt.mass, state.options.mass);
   BOOST_CHECK_EQUAL(volMatInt.pdg, state.options.absPdgCode);
   BOOST_CHECK_EQUAL(volMatInt.performCovarianceTransport,
                     state.stepping.covTransport);
-  BOOST_CHECK_EQUAL(volMatInt.nav, state.stepping.navDir);
+  BOOST_CHECK_EQUAL(volMatInt.navDir, state.stepping.navDir);
 
   // Evaluate the material
-  bool result = volMatInt.evaluateMaterialSlab(state);
+  bool result = volMatInt.evaluateMaterialSlab(state, navigator);
   BOOST_CHECK(result);
   BOOST_CHECK_EQUAL(volMatInt.slab.material(), mat);
   BOOST_CHECK_EQUAL(volMatInt.slab.thickness(), 1.);
@@ -106,9 +123,10 @@ BOOST_AUTO_TEST_CASE(volume_material_interaction_test) {
 
   // Evaluate the material without a tracking volume
   state.navigation.currentVolume = nullptr;
-  result = volMatInt.evaluateMaterialSlab(state);
+  result = volMatInt.evaluateMaterialSlab(state, navigator);
   BOOST_CHECK(!result);
   BOOST_CHECK_EQUAL(volMatInt.pathCorrection, 0.);
 }
+
 }  // namespace Test
 }  // namespace Acts

@@ -8,24 +8,29 @@
 
 #include "ActsExamples/TruthTracking/ParticleSelector.hpp"
 
-#include "Acts/Definitions/Units.hpp"
-#include "Acts/Utilities/Helpers.hpp"
+#include "Acts/Definitions/Common.hpp"
+#include "Acts/Utilities/VectorHelpers.hpp"
 #include "ActsExamples/EventData/SimParticle.hpp"
-#include "ActsExamples/Framework/WhiteBoard.hpp"
+#include "ActsExamples/Framework/AlgorithmContext.hpp"
+#include "ActsFatras/EventData/Particle.hpp"
 
-#include <algorithm>
+#include <ostream>
 #include <stdexcept>
-#include <vector>
+#include <utility>
 
 ActsExamples::ParticleSelector::ParticleSelector(const Config& config,
                                                  Acts::Logging::Level level)
-    : BareAlgorithm("ParticleSelector", level), m_cfg(config) {
+    : IAlgorithm("ParticleSelector", level), m_cfg(config) {
   if (m_cfg.inputParticles.empty()) {
     throw std::invalid_argument("Missing input particles collection");
   }
   if (m_cfg.outputParticles.empty()) {
     throw std::invalid_argument("Missing output particles collection");
   }
+
+  m_inputParticles.initialize(m_cfg.inputParticles);
+  m_outputParticles.initialize(m_cfg.outputParticles);
+
   ACTS_DEBUG("selection particle rho [" << m_cfg.rhoMin << "," << m_cfg.rhoMax
                                         << ")");
   ACTS_DEBUG("selection particle |z| [" << m_cfg.absZMin << "," << m_cfg.absZMax
@@ -40,6 +45,8 @@ ActsExamples::ParticleSelector::ParticleSelector(const Config& config,
                                           << m_cfg.absEtaMax << ")");
   ACTS_DEBUG("selection particle pt [" << m_cfg.ptMin << "," << m_cfg.ptMax
                                        << ")");
+  ACTS_DEBUG("selection particle m [" << m_cfg.mMin << "," << m_cfg.mMax
+                                      << ")");
   ACTS_DEBUG("remove charged particles " << m_cfg.removeCharged);
   ACTS_DEBUG("remove neutral particles " << m_cfg.removeNeutral);
 }
@@ -69,12 +76,13 @@ ActsExamples::ProcessCode ActsExamples::ParticleSelector::execute(
            within(std::abs(p.position()[Acts::ePos2]), m_cfg.absZMin,
                   m_cfg.absZMax) and
            within(rho, m_cfg.rhoMin, m_cfg.rhoMax) and
-           within(p.time(), m_cfg.timeMin, m_cfg.timeMax);
+           within(p.time(), m_cfg.timeMin, m_cfg.timeMax) and
+           within(p.mass(), m_cfg.mMin, m_cfg.mMax);
   };
 
   // prepare input/ output types
-  const auto& inputParticles =
-      ctx.eventStore.get<SimParticleContainer>(m_cfg.inputParticles);
+  const auto& inputParticles = m_inputParticles(ctx);
+
   SimParticleContainer outputParticles;
   outputParticles.reserve(inputParticles.size());
 
@@ -91,6 +99,6 @@ ActsExamples::ProcessCode ActsExamples::ParticleSelector::execute(
                       << outputParticles.size() << " from "
                       << inputParticles.size() << " particles");
 
-  ctx.eventStore.add(m_cfg.outputParticles, std::move(outputParticles));
+  m_outputParticles(ctx, std::move(outputParticles));
   return ProcessCode::SUCCESS;
 }

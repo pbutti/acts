@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Optional
 import math
 
 import acts
@@ -15,9 +16,17 @@ from acts.examples.reconstruction import (
 
 u = acts.UnitConstants
 
+from enum import Enum
+
+
+class InputSpacePointsType(Enum):
+    PixelSpacePoints = 0
+    StripSpacePoints = 1
+
 
 def buildITkGeometry(
     geo_dir: Path,
+    customMaterialFile: Optional[str] = None,
     material: bool = True,
     jsonconfig: bool = False,
     logLevel=acts.logging.WARNING,
@@ -28,8 +37,13 @@ def buildITkGeometry(
 
     matDeco = None
     if material:
-        file = geo_dir / "itk-hgtd/material-maps-ITk-HGTD.json"
-        logger.info("Adding material from %s", file.absolute())
+        file = None
+        if customMaterialFile:
+            file = customMaterialFile
+            logger.info("Adding custom material from %s", file)
+        else:
+            file = geo_dir / "itk-hgtd/material-maps-ITk-HGTD.json"
+            logger.info("Adding material from %s", file.absolute())
         matDeco = acts.IMaterialDecorator.fromFile(
             file,
             level=customLogLevel(maxLevel=acts.logging.INFO),
@@ -284,18 +298,20 @@ def buildITkGeometry(
     )
 
 
-def itkSeedingAlgConfig(inputSpacePointsType):
+def itkSeedingAlgConfig(inputSpacePointsType: InputSpacePointsType):
+    assert isinstance(inputSpacePointsType, InputSpacePointsType)
 
     # variables that do not change for pixel and strip SPs:
     zMax = 3000 * u.mm
     zMin = -3000 * u.mm
+    zOutermostLayers = (-2700 * u.mm, 2700 * u.mm)
     beamPos = (0 * u.mm, 0 * u.mm)
     collisionRegionMin = -200 * u.mm
     collisionRegionMax = 200 * u.mm
     maxSeedsPerSpM = 4
     cotThetaMax = 27.2899
     sigmaScattering = 2
-    radLengthPerSeed = 0.1
+    radLengthPerSeed = 0.0975
     minPt = 900 * u.MeV
     bFieldInZ = 2 * u.T
     deltaRMin = 20 * u.mm
@@ -305,10 +321,10 @@ def itkSeedingAlgConfig(inputSpacePointsType):
         -2500.0,
         -1400.0,
         -925.0,
-        -450.0,
+        -500.0,
         -250.0,
         250.0,
-        450.0,
+        500.0,
         925.0,
         1400.0,
         2500.0,
@@ -329,11 +345,10 @@ def itkSeedingAlgConfig(inputSpacePointsType):
     ]  # if useVariableMiddleSPRange is set to false, the vector rRangeMiddleSP can be used to define a fixed r range for each z bin: {{rMin, rMax}, ...}. If useVariableMiddleSPRange is set to false and the vector is empty, the cuts won't be applied
     useVariableMiddleSPRange = True  # if useVariableMiddleSPRange is true, the values in rRangeMiddleSP will be calculated based on r values of the SPs and deltaRMiddleSPRange
     binSizeR = 1 * u.mm
-    forceRadialSorting = True
     seedConfirmation = True
     centralSeedConfirmationRange = acts.SeedConfirmationRangeConfig(
-        zMinSeedConf=-250 * u.mm,
-        zMaxSeedConf=250 * u.mm,
+        zMinSeedConf=-500 * u.mm,
+        zMaxSeedConf=500 * u.mm,
         rMaxSeedConf=140 * u.mm,
         nTopForLargeR=1,
         nTopForSmallR=2,
@@ -353,14 +368,15 @@ def itkSeedingAlgConfig(inputSpacePointsType):
     )
     zOriginWeightFactor = 1
     compatSeedWeight = 100
-    curvatureSortingInFilter = True
     phiMin = 0
     phiMax = 2 * math.pi
     phiBinDeflectionCoverage = 3
     numPhiNeighbors = 1
+    # only used in orthogonal seeding
+    deltaPhiMax = 0.025
 
     # variables that change for pixel and strip SPs:
-    if inputSpacePointsType == "PixelSpacePoints":
+    if inputSpacePointsType is InputSpacePointsType.PixelSpacePoints:
         outputSeeds = "PixelSeeds"
         allowSeparateRMax = False
         rMaxGridConfig = 320 * u.mm
@@ -368,10 +384,10 @@ def itkSeedingAlgConfig(inputSpacePointsType):
         deltaRMinSP = 6 * u.mm
         deltaRMax = 280 * u.mm
         deltaRMaxTopSP = 280 * u.mm
-        deltaRMaxBottomSP = 120 * u.mm
+        deltaRMaxBottomSP = 150 * u.mm
+        deltaZMax = float("inf") * u.mm
         interactionPointCut = True
         arithmeticAverageCotTheta = False
-        deltaZMax = 600 * u.mm
         impactMax = 2 * u.mm
         zBinsCustomLooping = [
             1,
@@ -386,7 +402,6 @@ def itkSeedingAlgConfig(inputSpacePointsType):
             5,
             7,
         ]  # enable custom z looping when searching for SPs, must contain numbers from 1 to the total number of bin in zBinEdges
-        skipPreviousTopSP = True
         zBinNeighborsTop = [
             [0, 0],
             [-1, 0],
@@ -418,13 +433,13 @@ def itkSeedingAlgConfig(inputSpacePointsType):
         seedConfirmationFilter = True
         impactWeightFactor = 100
         compatSeedLimit = 3
-        numSeedIncrement = float("inf")
+        numSeedIncrement = 100
         seedWeightIncrement = 0
         useDetailedDoubleMeasurementInfo = False
         maxSeedsPerSpMConf = 5
         maxQualitySeedsPerSpMConf = 5
         useDeltaRorTopRadius = True
-    else:
+    elif inputSpacePointsType is InputSpacePointsType.StripSpacePoints:
         outputSeeds = "StripSeeds"
         allowSeparateRMax = True
         rMaxGridConfig = 1000.0 * u.mm
@@ -433,12 +448,11 @@ def itkSeedingAlgConfig(inputSpacePointsType):
         deltaRMax = 600 * u.mm
         deltaRMaxTopSP = 300 * u.mm
         deltaRMaxBottomSP = deltaRMaxTopSP
+        deltaZMax = 900 * u.mm
         interactionPointCut = False
         arithmeticAverageCotTheta = True
-        deltaZMax = 900 * u.mm
         impactMax = 20 * u.mm
         zBinsCustomLooping = [6, 7, 5, 8, 4, 9, 3, 10, 2, 11, 1]
-        skipPreviousTopSP = False
         zBinNeighborsTop = [
             [0, 0],
             [-1, 0],
@@ -473,8 +487,8 @@ def itkSeedingAlgConfig(inputSpacePointsType):
         numSeedIncrement = 1
         seedWeightIncrement = 10100
         useDetailedDoubleMeasurementInfo = True
-        maxSeedsPerSpMConf = 1000000000
-        maxQualitySeedsPerSpMConf = 1000000000
+        maxSeedsPerSpMConf = 100
+        maxQualitySeedsPerSpMConf = 100
         useDeltaRorTopRadius = False
 
     # fill namedtuples
@@ -485,17 +499,16 @@ def itkSeedingAlgConfig(inputSpacePointsType):
         radLengthPerSeed=radLengthPerSeed,
         minPt=minPt,
         impactMax=impactMax,
+        deltaPhiMax=deltaPhiMax,
         interactionPointCut=interactionPointCut,
         arithmeticAverageCotTheta=arithmeticAverageCotTheta,
         deltaZMax=deltaZMax,
         maxPtScattering=maxPtScattering,
         zBinEdges=zBinEdges,
-        skipPreviousTopSP=skipPreviousTopSP,
         zBinsCustomLooping=zBinsCustomLooping,
         rRangeMiddleSP=rRangeMiddleSP,
         useVariableMiddleSPRange=useVariableMiddleSPRange,
         binSizeR=binSizeR,
-        forceRadialSorting=forceRadialSorting,
         seedConfirmation=seedConfirmation,
         centralSeedConfirmationRange=centralSeedConfirmationRange,
         forwardSeedConfirmationRange=forwardSeedConfirmationRange,
@@ -506,6 +519,7 @@ def itkSeedingAlgConfig(inputSpacePointsType):
         collisionRegion=(collisionRegionMin, collisionRegionMax),
         r=(None, rMaxSeedFinderConfig),
         z=(zMin, zMax),
+        zOutermostLayers=zOutermostLayers,
     )
 
     seedFinderOptionsArg = SeedFinderOptionsArg(bFieldInZ=bFieldInZ, beamPos=beamPos)
@@ -518,7 +532,6 @@ def itkSeedingAlgConfig(inputSpacePointsType):
         numSeedIncrement=numSeedIncrement,
         seedWeightIncrement=seedWeightIncrement,
         seedConfirmation=seedConfirmation,
-        curvatureSortingInFilter=curvatureSortingInFilter,
         maxSeedsPerSpMConf=maxSeedsPerSpMConf,
         maxQualitySeedsPerSpMConf=maxQualitySeedsPerSpMConf,
         useDeltaRorTopRadius=useDeltaRorTopRadius,
@@ -538,9 +551,9 @@ def itkSeedingAlgConfig(inputSpacePointsType):
     )
 
     return (
+        seedingAlgorithmConfigArg,
         seedFinderConfigArg,
         seedFinderOptionsArg,
         seedFilterConfigArg,
         spacePointGridConfigArg,
-        seedingAlgorithmConfigArg,
     )

@@ -8,19 +8,22 @@
 
 #include "ActsExamples/Io/Root/RootAthenaNTupleReader.hpp"
 
+#include "Acts/Definitions/TrackParametrization.hpp"
+#include "Acts/EventData/SingleBoundTrackParameters.hpp"
 #include "Acts/EventData/TrackParameters.hpp"
 #include "Acts/Surfaces/PerigeeSurface.hpp"
+#include "Acts/Surfaces/Surface.hpp"
 #include "Acts/Vertexing/Vertex.hpp"
-#include "ActsExamples/EventData/SimParticle.hpp"
 #include "ActsExamples/EventData/Track.hpp"
-#include "ActsExamples/Framework/WhiteBoard.hpp"
-#include "ActsExamples/Utilities/Paths.hpp"
+#include "ActsExamples/Framework/AlgorithmContext.hpp"
 
+#include <cstdint>
 #include <iostream>
+#include <optional>
+#include <stdexcept>
 
 #include <TChain.h>
-#include <TFile.h>
-#include <TMath.h>
+#include <TMathBase.h>
 
 ActsExamples::RootAthenaNTupleReader::RootAthenaNTupleReader(
     const ActsExamples::RootAthenaNTupleReader::Config& config,
@@ -34,6 +37,11 @@ ActsExamples::RootAthenaNTupleReader::RootAthenaNTupleReader(
   if (m_cfg.inputTreeName.empty()) {
     throw std::invalid_argument("Missing tree name");
   }
+
+  m_outputTrackParameters.initialize(m_cfg.outputTrackParameters);
+  m_outputTruthVtxParameters.initialize(m_cfg.outputTruthVtxParameters);
+  m_outputRecoVtxParameters.initialize(m_cfg.outputRecoVtxParameters);
+  m_outputBeamspotConstraint.initialize(m_cfg.outputBeamspotConstraint);
 
   m_inputChain = new TChain(m_cfg.inputTreeName.c_str());
 
@@ -250,14 +258,10 @@ ActsExamples::ProcessCode ActsExamples::RootAthenaNTupleReader::read(
   beamspotConstraint.setPosition(beamspotPos);
   beamspotConstraint.setCovariance(beamspotCov);
 
-  context.eventStore.add(m_cfg.outputTrackParameters,
-                         std::move(trackContainer));
-  context.eventStore.add(m_cfg.outputTruthVtxParameters,
-                         std::move(truthVertexContainer));
-  context.eventStore.add(m_cfg.outputRecoVtxParameters,
-                         std::move(recoVertexContainer));
-  context.eventStore.add(m_cfg.outputBeamspotConstraint,
-                         std::move(beamspotConstraint));
+  m_outputTrackParameters(context, std::move(trackContainer));
+  m_outputTruthVtxParameters(context, std::move(truthVertexContainer));
+  m_outputRecoVtxParameters(context, std::move(recoVertexContainer));
+  m_outputBeamspotConstraint(context, std::move(beamspotConstraint));
 
   // Return success flag
   return ProcessCode::SUCCESS;

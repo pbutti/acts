@@ -86,7 +86,7 @@ KalmanFitterExtensions<VectorMultiTrajectory> getExtensions() {
 }
 
 ///
-/// @brief Contruct a telescope-like detector
+/// @brief Construct a telescope-like detector
 ///
 struct TelescopeDetector {
   /// Default constructor for the Cubit tracking geometry
@@ -298,8 +298,8 @@ BOOST_AUTO_TEST_CASE(ZeroFieldKalmanAlignment) {
 
   // Construct an non-updating alignment updater
   AlignedTransformUpdater voidAlignUpdater =
-      [](DetectorElementBase* /*unused*/, const GeometryContext& /*unused*/,
-         const Transform3& /*unused*/) { return true; };
+      [](DetectorElementBase* /*element*/, const GeometryContext& /*gctx*/,
+         const Transform3& /*transform*/) { return true; };
 
   // Construct the alignment options
   AlignmentOptions<KalmanFitterOptions<VectorMultiTrajectory>> alignOptions(

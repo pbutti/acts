@@ -14,6 +14,7 @@
 
 #include <array>
 #include <memory>
+#include <utility>
 #include <vector>
 
 using namespace Acts::UnitLiterals;
@@ -57,7 +58,7 @@ struct TelescopeDetector {
 
   std::pair<TrackingGeometryPtr, ContextDecorators> finalize(
       const Config& cfg,
-      const std::shared_ptr<const Acts::IMaterialDecorator>& /*unused*/);
+      const std::shared_ptr<const Acts::IMaterialDecorator>& mdecorator);
 };
 
 }  // namespace Telescope

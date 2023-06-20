@@ -9,36 +9,44 @@
 #pragma once
 
 #include "Acts/EventData/SourceLink.hpp"
+#include "Acts/EventData/TrackContainer.hpp"
 #include "Acts/EventData/VectorMultiTrajectory.hpp"
 #include "Acts/EventData/VectorTrackContainer.hpp"
 #include "Acts/Geometry/TrackingGeometry.hpp"
 #include "Acts/TrackFitting/Chi2Fitter.hpp"
+#include "Acts/Utilities/Logger.hpp"
+#include "Acts/Utilities/Result.hpp"
 #include "ActsExamples/EventData/IndexSourceLink.hpp"
 #include "ActsExamples/EventData/Measurement.hpp"
+#include "ActsExamples/EventData/ProtoTrack.hpp"
 #include "ActsExamples/EventData/Track.hpp"
-#include "ActsExamples/Framework/BareAlgorithm.hpp"
+#include "ActsExamples/Framework/DataHandle.hpp"
+#include "ActsExamples/Framework/IAlgorithm.hpp"
+#include "ActsExamples/Framework/ProcessCode.hpp"
 #include "ActsExamples/MagneticField/MagneticField.hpp"
 
 #include <functional>
 #include <memory>
+#include <string>
 #include <vector>
 
 namespace Acts {
 class TrackingGeometry;
-}
+class MagneticFieldProvider;
+class SourceLink;
+class Surface;
+class VectorMultiTrajectory;
+}  // namespace Acts
 
 namespace ActsExamples {
+struct AlgorithmContext;
 
-class TrackFittingChi2Algorithm final : public BareAlgorithm {
+class TrackFittingChi2Algorithm final : public IAlgorithm {
  public:
   /// Track fitter function that takes input measurements, initial trackstate
   /// and fitter options and returns some track-fitter-specific result.
   using TrackFitterChi2Options =
       Acts::Experimental::Chi2FitterOptions<Acts::VectorMultiTrajectory>;
-
-  using TrackContainer =
-      Acts::TrackContainer<Acts::VectorTrackContainer,
-                           Acts::VectorMultiTrajectory, std::shared_ptr>;
 
   using TrackFitterChi2Result = Acts::Result<TrackContainer::TrackProxy>;
 
@@ -63,7 +71,7 @@ class TrackFittingChi2Algorithm final : public BareAlgorithm {
     /// Input initial track parameter estimates for for each proto track.
     std::string inputInitialTrackParameters;
     /// Output fitted trajectories collection.
-    std::string outputTrajectories;
+    std::string outputTracks;
     /// number of update steps
     unsigned int nUpdates = 0;
     /// Type erased fitter function.
@@ -80,7 +88,7 @@ class TrackFittingChi2Algorithm final : public BareAlgorithm {
 
   /// Constructor of the fitting algorithm
   ///
-  /// @param config is the config struct to configure the algorihtm
+  /// @param config is the config struct to configure the algorithm
   /// @param level is the logging level
   TrackFittingChi2Algorithm(Config config, Acts::Logging::Level level);
 
@@ -112,6 +120,17 @@ class TrackFittingChi2Algorithm final : public BareAlgorithm {
       TrackContainer& trackContainer) const;
 
   Config m_cfg;
+
+  ReadDataHandle<MeasurementContainer> m_measurementReadHandle{this,
+                                                               "Measurements"};
+  ReadDataHandle<IndexSourceLinkContainer> m_sourceLinkReadHandle{
+      this, "SourceLinks"};
+  ReadDataHandle<ProtoTrackContainer> m_protoTracksReadHandle{this,
+                                                              "ProtoTracks"};
+  ReadDataHandle<TrackParametersContainer> m_initialParametersReadHandle{
+      this, "TrackParameters"};
+
+  WriteDataHandle<ConstTrackContainer> m_outputTracks{this, "OutputTracks"};
 };
 
 inline ActsExamples::TrackFittingChi2Algorithm::TrackFitterChi2Result

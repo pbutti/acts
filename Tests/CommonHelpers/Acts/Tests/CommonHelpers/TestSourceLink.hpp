@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "Acts/Definitions/Algebra.hpp"
 #include "Acts/Definitions/TrackParametrization.hpp"
 #include "Acts/EventData/Measurement.hpp"
 #include "Acts/EventData/MultiTrajectory.hpp"
@@ -15,6 +16,7 @@
 #include "Acts/Geometry/GeometryContext.hpp"
 #include "Acts/Geometry/GeometryIdentifier.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cassert>
 #include <cstddef>
@@ -28,7 +30,7 @@ namespace Test {
 ///
 /// Instead of storing a reference to a measurement or raw data, the measurement
 /// data is stored inline directly in the source link. Only 1d or 2d
-/// measurements are supported to limit the overhead. Additionaly, a source
+/// measurements are supported to limit the overhead. Additionally, a source
 /// identifier is stored that can be used to store additional information. How
 /// this is interpreted depends on the specific tests.
 struct TestSourceLink final {
@@ -82,19 +84,19 @@ template <typename trajectory_t>
 Acts::BoundVariantMeasurement testSourceLinkCalibratorReturn(
     const GeometryContext& /*gctx*/,
     typename trajectory_t::TrackStateProxy trackState) {
-  const TestSourceLink& sl =
-      trackState.uncalibratedSourceLink().template get<TestSourceLink>();
+  TestSourceLink sl =
+      trackState.getUncalibratedSourceLink().template get<TestSourceLink>();
   if ((sl.indices[0] != Acts::eBoundSize) and
       (sl.indices[1] != Acts::eBoundSize)) {
     auto meas =
-        makeMeasurement(trackState.uncalibratedSourceLink(), sl.parameters,
+        makeMeasurement(trackState.getUncalibratedSourceLink(), sl.parameters,
                         sl.covariance, sl.indices[0], sl.indices[1]);
     trackState.allocateCalibrated(2);
     trackState.setCalibrated(meas);
     return meas;
   } else if (sl.indices[0] != Acts::eBoundSize) {
     auto meas = makeMeasurement(
-        trackState.uncalibratedSourceLink(), sl.parameters.head<1>(),
+        trackState.getUncalibratedSourceLink(), sl.parameters.head<1>(),
         sl.covariance.topLeftCorner<1, 1>(), sl.indices[0]);
     trackState.allocateCalibrated(1);
     trackState.setCalibrated(meas);

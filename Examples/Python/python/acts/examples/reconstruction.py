@@ -1467,6 +1467,7 @@ def addVertexFitting(
     customLogLevel = acts.examples.defaultLogging(s, logLevel)
 
     if trackSelectorConfig is not None:
+
         trackSelector = addTrackSelection(
             s,
             trackSelectorConfig,
@@ -1476,7 +1477,7 @@ def addVertexFitting(
             outputTrajectories="selectedTrajectoriesVertexing",
             logLevel=customLogLevel(),
         )
-
+        
         trajectories = trackSelector.config.outputTrajectories if trajectories else ""
         trackParameters = (
             trackSelector.config.outputTrackParameters if trackParameters else ""
@@ -1547,6 +1548,68 @@ def addVertexFitting(
                 minTrackVtxMatchFraction=0.5 if associatedParticles else 0.0,
                 treeName="vertexing",
                 filePath=str(outputDirRoot / "performance_vertexing.root"),
+            )
+        )
+
+    return s
+
+
+def addTrackJets(
+        s,
+        field,
+        outputDirRoot : Optional[Union[Path,str]] = None,
+        input_TrackCollection : Optional[str] = "tracks",
+        input_Trajectories    : Optional[str] = "trajectories",
+        input_Vertices        : Optional[str] = "fittedVertices",
+        input_Particles : Optional[str] = None,
+        radius : Optional[float] = 0.4,
+        trackMass : Optional[float] = 0.135,
+        tj_minPt  : Optional[float] = 20.,
+        outputTrackJets : Optional[str] = "jets"
+) -> None:
+
+    """ This function steers the jet clustering and track-to-jet association
+
+    Parameters
+    ----------
+
+    s: Sequencer
+        the sequencer module.
+    outputDirRoot : Path|str, path, None
+        the output folder for the Root output, None triggers no output
+    """
+    from acts.examples import (
+        TrackJetsAlgorithm,
+        RootEventWriter,
+    )
+
+    
+    trackjetsAlgorithm = TrackJetsAlgorithm(
+        inputTrackCollection="",
+        inputTrajectories   = input_Trajectories,
+        simParticles        = input_Particles,
+        radius              = 0.4,
+        tj_minPt            = 20.,
+        outputTrackJets=outputTrackJets,
+        level=acts.logging.INFO
+    )
+
+    s.addAlgorithm(trackjetsAlgorithm)
+
+    print("outputDirRoot==",outputDirRoot)
+    if outputDirRoot is not None:
+        outputDirRoot = Path(outputDirRoot)
+        if not outputDirRoot.exists():
+            outputDirRoot.mkdir()
+        s.addWriter(
+            RootEventWriter(
+                field=field,
+                level=acts.logging.INFO,
+                inputJets=outputTrackJets,
+                inputTrajectories=input_Trajectories,
+                recoVertices = input_Vertices,
+                treeName="events",
+                filePath=str(outputDirRoot / "events.root"),
             )
         )
 

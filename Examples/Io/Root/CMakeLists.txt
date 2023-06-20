@@ -1,3 +1,12 @@
+message(STATUS "Try to generate ROOT Dictionary using macro ${ROOT_DIR}/RootMacros.cmake")
+
+include("${ROOT_DIR}/RootMacros.cmake")
+
+message(STATUS "CURRENT DIRS BINARY: ${CMAKE_CURRENT_BINARY_DIR}")
+message(STATUS "CURRENT DIRS SOURCE: ${CMAKE_CURRENT_SOURCE_DIR}")
+  
+root_generate_dictionary(${CMAKE_CURRENT_SOURCE_DIR}/src/EventDict ${CMAKE_CURRENT_SOURCE_DIR}/include/ActsExamples/Io/Root/EventDef.h LINKDEF ${CMAKE_CURRENT_SOURCE_DIR}/include/ActsExamples/Io/Root/EventLinkDef.h)
+
 add_library(
   ActsExamplesIoRoot SHARED
   src/RootMeasurementWriter.cpp
@@ -16,6 +25,8 @@ add_library(
   src/RootTrajectorySummaryReader.cpp
   src/RootTrajectorySummaryWriter.cpp
   src/RootBFieldWriter.cpp
+  src/RootEventWriter.cpp
+  src/EventDict.cxx
   src/RootAthenaNTupleReader.cpp
 )
 target_include_directories(
@@ -26,8 +37,15 @@ target_link_libraries(
   PUBLIC
     ActsCore ActsPluginIdentification ActsExamplesDigitization
     ActsExamplesFramework ActsExamplesPropagation ActsExamplesTruthTracking ActsExamplesMaterialMapping
-    Threads::Threads
-  PRIVATE ROOT::Core ROOT::Hist ROOT::Tree)
+    Threads::Threads 
+    PRIVATE ROOT::Core ROOT::Hist ROOT::Tree)
+  
+# Install ROOT pcm file
+
+
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/../../../lib/libEventDict_rdict.pcm
+        DESTINATION ${CMAKE_INSTALL_PREFIX})
+
 
 install(
   TARGETS ActsExamplesIoRoot

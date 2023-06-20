@@ -65,7 +65,10 @@ ActsExamples::ProcessCode ActsExamples::ParticleSelector::execute(
     const bool validNeutral = (p.charge() == 0) and not m_cfg.removeNeutral;
     const bool validCharged = (p.charge() != 0) and not m_cfg.removeCharged;
     const bool validCharge = validNeutral or validCharged;
+    const bool isFinal   = (p.isFinal())   or  not m_cfg.removeNonFinal;
+    const bool isVisible = (p.isVisible()) or  not m_cfg.removeNonVisible;
     return validCharge and
+           isFinal and isVisible and
            within(p.transverseMomentum(), m_cfg.ptMin, m_cfg.ptMax) and
            within(std::abs(eta), m_cfg.absEtaMin, m_cfg.absEtaMax) and
            within(eta, m_cfg.etaMin, m_cfg.etaMax) and

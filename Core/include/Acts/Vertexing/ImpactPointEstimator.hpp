@@ -116,7 +116,7 @@ class ImpactPointEstimator {
       const GeometryContext& gctx, const Acts::MagneticFieldContext& mctx,
       const BoundTrackParameters& trkParams, const Vector3& vtxPos,
       State& state) const;
-
+  
   /// @brief Estimates the compatibility of a
   /// track to a vertex position based on the 3d
   /// distance between the track and the vertex
@@ -130,7 +130,7 @@ class ImpactPointEstimator {
   Result<double> get3dVertexCompatibility(const GeometryContext& gctx,
                                           const BoundTrackParameters* trkParams,
                                           const Vector3& vertexPos) const;
-
+  
   /// @brief Estimates the impact parameters and their errors of a given
   /// track w.r.t. a vertex by propagating the trajectory state
   /// towards the vertex position.
@@ -142,7 +142,6 @@ class ImpactPointEstimator {
   Result<ImpactParametersAndSigma> estimateImpactParameters(
       const BoundTrackParameters& track, const Vertex<input_track_t>& vtx,
       const GeometryContext& gctx, const MagneticFieldContext& mctx) const;
-
   /// @brief Estimates the sign of the 2D and Z lifetime of a given track
   /// w.r.t. a vertex and a direction (e.g. a jet direction)
   /// by propagating the trajectory state towards the vertex position

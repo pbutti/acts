@@ -219,6 +219,37 @@ class Particle {
   /// Accumulated path within material measured in interaction lengths.
   constexpr Scalar pathInL0() const { return m_pathInL0; }
 
+  /// Set particle as final
+  constexpr Particle &setIsFinal(bool isfinal) {
+    m_isFinal = isfinal;
+    return *this;
+  }
+  constexpr bool isFinal() const {return m_isFinal; }
+
+  /// Set particle as visible
+  constexpr Particle &setIsVisible(bool isvisible) {
+    m_isVisible = isvisible;
+    return *this;
+  }
+  constexpr bool isVisible() const {return m_isVisible; }
+
+  /// Set particle as visible
+  constexpr Particle &setIsStable(bool isstable) {
+    m_isStable = isstable;
+    return *this;
+  }
+  constexpr bool isStable() const {return m_isStable; }
+
+
+  /// Set particle status
+  constexpr Particle &setStatus(int status) {
+    m_status = status;
+    return *this;
+  }
+
+  constexpr int status() const {return m_status;}
+  
+
  private:
   // identity, i.e. things that do not change over the particle lifetime.
   /// Particle identifier within the event.
@@ -227,6 +258,14 @@ class Particle {
   ProcessType m_process = ProcessType::eUndefined;
   /// PDG particle number.
   Acts::PdgParticle m_pdg = Acts::PdgParticle::eInvalid;
+  /// Particle tagged as final from pythia
+  bool m_isFinal = true;
+  /// Particle tagged as visible from pythia
+  bool m_isVisible = true;
+  /// Particle status
+  int m_status = -1;
+  /// Particle stable (status == 1 and no daughters)
+  bool m_isStable = true;
   // Particle charge and mass.
   Scalar m_charge = Scalar(0);
   Scalar m_mass = Scalar(0);

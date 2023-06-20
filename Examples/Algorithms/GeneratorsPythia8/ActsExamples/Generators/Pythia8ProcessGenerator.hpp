@@ -40,6 +40,8 @@ class Pythia8Generator : public EventGenerator::ParticlesGenerator {
     bool printShortEventListing = false;
     /// Let pythia print detailed event info
     bool printLongEventListing = false;
+    /// Keep Intermediate particles
+    bool keepIntermediate = true;
   };
 
   Pythia8Generator(const Config& cfg, Acts::Logging::Level lvl);

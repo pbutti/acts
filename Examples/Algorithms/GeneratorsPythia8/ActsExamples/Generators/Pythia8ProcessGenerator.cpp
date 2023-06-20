@@ -80,16 +80,23 @@ ActsExamples::SimParticleContainer ActsExamples::Pythia8Generator::operator()(
   // convert generated final state particles into internal format
   for (int ip = 0; ip < m_pythia8->event.size(); ++ip) {
     const auto& genParticle = m_pythia8->event[ip];
+    const auto pdgcheck = static_cast<Acts::PdgParticle>(genParticle.id());
 
     // ignore beam particles
-    if (genParticle.statusHepMC() == 4) {
+    if (genParticle.statusHepMC() == 4 || genParticle.statusHepMC() == 11) {
       continue;
     }
+    
+    // ignore quark/gluons and intermediate particles of no interest
+    if (genParticle.statusHepMC() != 1 && genParticle.statusHepMC() != 2) {
+      continue;
+    }
+    
     // only interested in final, visible particles
-    if (not genParticle.isFinal()) {
+    if (!m_cfg.keepIntermediate && not genParticle.isFinal()) {
       continue;
     }
-    if (not genParticle.isVisible()) {
+    if (!m_cfg.keepIntermediate && not genParticle.isVisible()) {
       continue;
     }
 
@@ -119,7 +126,7 @@ ActsExamples::SimParticleContainer ActsExamples::Pythia8Generator::operator()(
             1u + std::distance(vertexPositions.begin(), it));
       }
     }
-
+    
     // construct internal particle
     const auto pdg = static_cast<Acts::PdgParticle>(genParticle.id());
     const auto charge = genParticle.charge() * 1_e;
@@ -131,10 +138,18 @@ ActsExamples::SimParticleContainer ActsExamples::Pythia8Generator::operator()(
     particle.setAbsoluteMomentum(
         std::hypot(genParticle.px(), genParticle.py(), genParticle.pz()) *
         1_GeV);
-
+    particle.setIsVisible(genParticle.isVisible());
+    particle.setIsFinal(genParticle.isFinal());
+    particle.setStatus(genParticle.statusHepMC());
+    
+    if (genParticle.statusHepMC() == 1 && genParticle.daughterList().size() == 0)
+      particle.setIsStable(true);
+    else
+      particle.setIsStable(false);
+    
     generated.push_back(std::move(particle));
   }
-
+  
   SimParticleContainer out;
   out.insert(generated.begin(), generated.end());
   return out;

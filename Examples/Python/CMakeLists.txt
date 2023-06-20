@@ -24,6 +24,7 @@ pybind11_add_module(ActsPythonBindings
   src/TrackFinding.cpp
   src/Vertexing.cpp
   src/AmbiguityResolution.cpp
+  src/TrackJets.cpp
 )
 install(TARGETS ActsPythonBindings DESTINATION ${_python_install_dir})
 
@@ -54,6 +55,7 @@ target_link_libraries(ActsPythonBindings PUBLIC
   ActsExamplesDetectorTelescope
   ActsExamplesUtilities
   ActsExamplesAmbiguityResolution
+  ActsExamplesTrackJets
 )
 
 set(py_files 

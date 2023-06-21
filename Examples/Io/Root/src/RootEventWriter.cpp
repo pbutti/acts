@@ -20,10 +20,6 @@
 #include "ActsExamples/Utilities/Paths.hpp"
 #include "ActsExamples/Utilities/Range.hpp"
 #include "ActsExamples/Validation/TrackClassification.hpp"
-#include "ActsExamples/EventData/Trajectories.hpp"
-#include "Acts/Vertexing/Vertex.hpp"
-
-
 
 #include <ios>
 #include <iostream>
@@ -197,6 +193,14 @@ ActsExamples::RootEventWriter::RootEventWriter(
   ImpactPointEstimator::Config ipEstCfg(m_cfg.field, m_propagator);
 
   m_ipEst = std::make_shared<ImpactPointEstimator> (ipEstCfg);
+
+
+  // Handle inputs
+
+  m_inputJets.initialize(m_cfg.inputJets);
+  m_inputTrajectories.initialize(m_cfg.inputTrajectories);
+  m_recoVertices.initialize(m_cfg.recoVertices);
+  
     
 }
 
@@ -206,7 +210,7 @@ ActsExamples::RootEventWriter::~RootEventWriter() {
   }
 }
 
-ActsExamples::ProcessCode ActsExamples::RootEventWriter::endRun() {
+ActsExamples::ProcessCode ActsExamples::RootEventWriter::finalize() {
   if (m_outputFile != nullptr) {
     m_outputFile->cd();
     m_outputTree->Write();
@@ -234,18 +238,15 @@ ActsExamples::ProcessCode ActsExamples::RootEventWriter::writeT(
   if (m_outputFile == nullptr) {
     return ProcessCode::SUCCESS;
   }
+
+  
   
   // Read input collections
+  const auto& jets = m_inputJets(ctx);
+  const auto& inputTrajectories = m_inputTrajectories(ctx);
+  const auto& reco_vertices = m_recoVertices(ctx);
   
-  const auto& jets =
-      ctx.eventStore.get<TrackJetContainer>(m_cfg.inputJets);
-  
-  const auto& inputTrajectories =
-      ctx.eventStore.get<TrajectoriesContainer>(m_cfg.inputTrajectories);
-
-  const auto& reco_vertices =
-      ctx.eventStore.get<VertexContainer>(m_cfg.recoVertices);
-  
+    
   ACTS_INFO("RootWriter::Number of "<<m_cfg.inputTrajectories << " "<< inputTrajectories.size());
 
   TrackParametersContainer tracks;

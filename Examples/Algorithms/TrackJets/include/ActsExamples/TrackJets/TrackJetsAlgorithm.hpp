@@ -4,8 +4,10 @@
 #include "ActsExamples/EventData/Track.hpp"
 #include "ActsExamples/EventData/SimParticle.hpp"
 #include "ActsExamples/EventData/TrackJet.hpp"
+#include "ActsExamples/EventData/Trajectories.hpp"
 
-#include "ActsExamples/Framework/BareAlgorithm.hpp"
+#include "ActsExamples/Framework/IAlgorithm.hpp"
+#include "ActsExamples/Framework/DataHandle.hpp"
 #include "Acts/Definitions/Units.hpp"
 
 #include "fastjet/ClusterSequence.hh"
@@ -19,7 +21,7 @@ using namespace Acts::UnitLiterals;
 
 namespace ActsExamples {
 
-class TrackJetsAlgorithm final : public BareAlgorithm {
+class TrackJetsAlgorithm final : public IAlgorithm {
  public:
 
   struct Config {
@@ -73,7 +75,12 @@ class TrackJetsAlgorithm final : public BareAlgorithm {
  private:
   Config m_cfg;
   std::shared_ptr<fastjet::JetDefinition> m_jet_def;
-  
+
+    ReadDataHandle<TrajectoriesContainer> m_inputTrajectories{this,"InputTrajectories"};
+    ReadDataHandle<SimParticleContainer> m_simulatedParticles{this,"SimParticles"};
+    
+    WriteDataHandle<TrackJetContainer> m_outputTrackJets{this, "outputTrackJets"};
+    
 };
   
 } // namespace ActsExamples

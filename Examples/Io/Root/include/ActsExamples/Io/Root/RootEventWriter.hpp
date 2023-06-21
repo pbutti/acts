@@ -11,12 +11,17 @@
 #include "ActsExamples/EventData/Track.hpp"
 #include "ActsExamples/EventData/TrackJet.hpp"
 #include "ActsExamples/Framework/WriterT.hpp"
+#include "ActsExamples/Framework/DataHandle.hpp"
 
 //This I need to compute the ip2d and ip3d - to do: move this into an algorithm
 #include "Acts/Vertexing/ImpactPointEstimator.hpp" 
 #include "Acts/MagneticField/MagneticFieldProvider.hpp"
 #include "Acts/Propagator/EigenStepper.hpp"
 #include "Acts/Propagator/Propagator.hpp"
+
+#include "ActsExamples/EventData/Trajectories.hpp"
+#include "Acts/Vertexing/Vertex.hpp"
+
 
 #include <mutex>
 #include <memory>
@@ -84,7 +89,7 @@ class RootEventWriter final : public TrackJetWriter {
   ~RootEventWriter() override;
   
   /// End-of-run hook
-  ProcessCode endRun() override;
+  ProcessCode finalize() override;
 
   /// Get readonly access to the config parameters
   const Config& config() const { return m_cfg; }
@@ -101,8 +106,15 @@ class RootEventWriter final : public TrackJetWriter {
 
 
   void Clear();
-  
 
+
+  //Handles 
+
+
+    ReadDataHandle<TrackJetContainer> m_inputJets{this, "inputJets"};
+    ReadDataHandle<TrajectoriesContainer> m_inputTrajectories{this, "inputTrajectories"};
+    ReadDataHandle<VertexContainer> m_recoVertices{this, "recoVertices"};
+    
   //Vertices//
   std::vector<float> m_vtx_x;
   std::vector<float> m_vtx_y;

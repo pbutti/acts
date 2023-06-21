@@ -5,7 +5,7 @@
 #include <stdexcept>
 
 #include "Acts/Utilities/Helpers.hpp"
-#include "ActsExamples/EventData/Trajectories.hpp"
+
 
 using Acts::VectorHelpers::eta;
 using Acts::VectorHelpers::theta;
@@ -14,7 +14,7 @@ using namespace Acts;
 
 ActsExamples::TrackJetsAlgorithm::TrackJetsAlgorithm(
     Config config, Acts::Logging::Level level)
-    : ActsExamples::BareAlgorithm("TrackJetsAlgorithm", level),
+    : ActsExamples::IAlgorithm("TrackJetsAlgorithm", level),
       m_cfg(std::move(config)) {
   
   if (m_cfg.inputTrackCollection.empty() == m_cfg.inputTrajectories.empty()) {
@@ -23,6 +23,11 @@ ActsExamples::TrackJetsAlgorithm::TrackJetsAlgorithm(
   if (m_cfg.outputTrackJets.empty()) {
     throw std::invalid_argument("Missing output track jets collection");
   }
+
+  m_inputTrajectories.maybeInitialize(m_cfg.inputTrajectories);
+  m_simulatedParticles.maybeInitialize(m_cfg.simParticles);
+
+  m_outputTrackJets.initialize(m_cfg.outputTrackJets);
   
   m_jet_def = std::make_shared<fastjet::JetDefinition>(fastjet::antikt_algorithm, m_cfg.radius);
   
@@ -30,16 +35,20 @@ ActsExamples::TrackJetsAlgorithm::TrackJetsAlgorithm(
 
 ActsExamples::ProcessCode ActsExamples::TrackJetsAlgorithm::execute(
     const ActsExamples::AlgorithmContext& ctx) const {
-
+    
   TrackParametersContainer tracks;
   
   //Read input data
   //const auto& tracks = 
   //    ctx.eventStore.get<TrackParametersContainer>(m_cfg.inputTrackCollection);
-  
-  const auto& inputTrajectories =
-      ctx.eventStore.get<TrajectoriesContainer>(m_cfg.inputTrajectories);
 
+  if (!m_inputTrajectories.isInitialized() || !m_simulatedParticles.isInitialized())
+      return ActsExamples::ProcessCode::ABORT;
+
+  
+  const auto& inputTrajectories = m_inputTrajectories(ctx);
+  
+  
   ACTS_INFO("TrackJetsAlgorithm::Number of "<<m_cfg.inputTrajectories << " "<< inputTrajectories.size());
   
   for (const auto& trajectories : inputTrajectories) {
@@ -59,11 +68,13 @@ ActsExamples::ProcessCode ActsExamples::TrackJetsAlgorithm::execute(
   }
   
   ACTS_INFO("TrackJetsAlgorithm::Number of tracks " << tracks.size());
-      
+
+  const auto& simulatedParticles = m_simulatedParticles(ctx);
+  
   //Empty set if simParticles is not set in configuration
-  const auto& simulatedParticles =
-      (!m_cfg.simParticles.empty()) ? ctx.eventStore.get<SimParticleContainer>(m_cfg.simParticles) :
-      ::boost::container::flat_set<::ActsFatras::Particle,detail::CompareParticleId>();
+  //const auto& simulatedParticles =
+  //(!m_cfg.simParticles.empty()) ? ctx.eventStore.get<SimParticleContainer>(m_cfg.simParticles) :
+      //::boost::container::flat_set<::ActsFatras::Particle,detail::CompareParticleId>();
   
   //Form jets
   std::vector<fastjet::PseudoJet> input_particles;
@@ -142,8 +153,10 @@ ActsExamples::ProcessCode ActsExamples::TrackJetsAlgorithm::execute(
 
   //Associate the tracks to the jets
   associateTracksToJets(tracks, outputTrackJets, 0.4);
+
+  m_outputTrackJets(ctx,std::move(outputTrackJets));
   
-  ctx.eventStore.add(m_cfg.outputTrackJets, std::move(outputTrackJets));
+  
   
   return ActsExamples::ProcessCode::SUCCESS;
   

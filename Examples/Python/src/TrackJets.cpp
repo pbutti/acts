@@ -32,7 +32,7 @@ void addTrackJets(Context& ctx) {
     using Config = Alg::Config;
 
     auto alg =
-        py::class_<Alg,BareAlgorithm,std::shared_ptr<Alg>>(
+        py::class_<Alg,IAlgorithm,std::shared_ptr<Alg>>(
             mex,"TrackJetsAlgorithm")
         .def(py::init<const Alg::Config&, Acts::Logging::Level>(),
              py::arg("config"), py::arg("level"))

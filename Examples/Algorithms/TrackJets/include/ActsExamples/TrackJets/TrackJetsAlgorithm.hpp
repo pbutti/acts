@@ -45,7 +45,7 @@ class TrackJetsAlgorithm final : public IAlgorithm {
     std::string outputTrackJets;
   };
 
-  TrackJetsAlgorithm(Config config, Acts::Logging::Level level);
+  TrackJetsAlgorithm(const Config& config, Acts::Logging::Level level);
 
   /// Framework execute method of the fitting algorithm
   ///

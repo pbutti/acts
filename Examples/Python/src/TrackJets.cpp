@@ -27,6 +27,7 @@ namespace Acts::Python {
 void addTrackJets(Context& ctx) {
   auto mex = ctx.get("examples");
 
+  /*
   {
     using Alg = ActsExamples::TrackJetsAlgorithm;
     using Config = Alg::Config;
@@ -51,7 +52,13 @@ void addTrackJets(Context& ctx) {
     ACTS_PYTHON_MEMBER(outputTrackJets);
     ACTS_PYTHON_STRUCT_END();
     
-  }
+    }
+  */
+  
+  ACTS_PYTHON_DECLARE_ALGORITHM(
+      ActsExamples::TrackJetsAlgorithm, mex,"TrackJetsAlgorithm",
+      inputTrackCollection, inputTrajectories, simParticles,
+      radius, trackMass, tj_minPt, outputTrackJets);
 }
 
 } // namespace Acts:Python

@@ -13,9 +13,9 @@ using Acts::VectorHelpers::theta;
 using namespace Acts;
 
 ActsExamples::TrackJetsAlgorithm::TrackJetsAlgorithm(
-    Config config, Acts::Logging::Level level)
+    const Config& config, Acts::Logging::Level level)
     : ActsExamples::IAlgorithm("TrackJetsAlgorithm", level),
-      m_cfg(std::move(config)) {
+      m_cfg(config) {
   
   if (m_cfg.inputTrackCollection.empty() == m_cfg.inputTrajectories.empty()) {
     throw std::invalid_argument("Missing input track collection");

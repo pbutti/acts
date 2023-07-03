@@ -42,8 +42,10 @@ ParticleSelectorConfig = namedtuple(
         "m",  # (min,max)
         "removeCharged",  # bool
         "removeNeutral",  # bool
+        "removeNonFinal",
+        "removeNonVisible",
     ],
-    defaults=[(None, None)] * 8 + [None] * 2,
+    defaults=[(None, None)] * 8 + [None] * 4,
 )
 
 
@@ -371,6 +373,9 @@ def addParticleSelection(
                 mMax=config.m[1],
                 removeCharged=config.removeCharged,
                 removeNeutral=config.removeNeutral,
+                removeNonFinal=config.removeNonFinal,
+                removeNonVisible=config.removeNonVisible
+                
             ),
             level=customLogLevel(),
             inputParticles=inputParticles,

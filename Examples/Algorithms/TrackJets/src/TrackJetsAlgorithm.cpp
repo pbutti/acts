@@ -5,7 +5,9 @@
 #include <stdexcept>
 
 #include "Acts/Utilities/Helpers.hpp"
+#include "ActsExamples/TrackJets/VertexingHelpers.hpp"
 
+#include <algorithm>
 
 using Acts::VectorHelpers::eta;
 using Acts::VectorHelpers::theta;
@@ -24,9 +26,13 @@ ActsExamples::TrackJetsAlgorithm::TrackJetsAlgorithm(
     throw std::invalid_argument("Missing output track jets collection");
   }
 
+  //Inputs
   m_inputTrajectories.maybeInitialize(m_cfg.inputTrajectories);
   m_simulatedParticles.maybeInitialize(m_cfg.simParticles);
-
+  m_recoVertices.maybeInitialize(m_cfg.recoVertices);
+  m_inputMeasurementParticlesMap.maybeInitialize(m_cfg.inputMeasurementParticlesMap);
+  
+  //Outputs
   m_outputTrackJets.initialize(m_cfg.outputTrackJets);
   
   m_jet_def = std::make_shared<fastjet::JetDefinition>(fastjet::antikt_algorithm, m_cfg.radius);
@@ -35,22 +41,71 @@ ActsExamples::TrackJetsAlgorithm::TrackJetsAlgorithm(
 
 ActsExamples::ProcessCode ActsExamples::TrackJetsAlgorithm::execute(
     const ActsExamples::AlgorithmContext& ctx) const {
-    
-  TrackParametersContainer tracks;
-  
-  //Read input data
-  //const auto& tracks = 
-  //    ctx.eventStore.get<TrackParametersContainer>(m_cfg.inputTrackCollection);
 
+  //Inputs
+  TrackParametersContainer tracks;
+  TrackParametersContainer truthMatchedTrackParameters;
+  std::vector<SimParticle> associatedTruthParticles;
+
+  //Outputs
+  TrackJetContainer outputTrackJets;
+  
   if (!m_inputTrajectories.isInitialized() || !m_simulatedParticles.isInitialized())
       return ActsExamples::ProcessCode::ABORT;
 
   
   const auto& inputTrajectories = m_inputTrajectories(ctx);
-  
-  
   ACTS_INFO("TrackJetsAlgorithm::Number of "<<m_cfg.inputTrajectories << " "<< inputTrajectories.size());
   
+  const auto& hitParticleMap = m_inputMeasurementParticlesMap(ctx);
+
+  const auto& simulatedParticles = m_simulatedParticles(ctx);
+  ACTS_INFO("TrackJetsAlgorithm::Number of simulated particles " << simulatedParticles.size());
+
+  for (auto& particle : simulatedParticles) {
+    ACTS_DEBUG("Particle (pdg, vertexPrimary, vertexSecondary) "<< particle.pdg()<<" "<<particle.particleId().vertexPrimary()<<" " << particle.particleId().vertexSecondary());
+  }
+  
+  const auto& recoVertices = m_recoVertices(ctx);
+  ACTS_INFO("TrackJetsAlgorithm::Number of reconstructedVertices " << recoVertices.size());
+
+  //Exit if no reco vertices are found
+  if (recoVertices.size() == 0) {
+
+    //Empty output collection
+    m_outputTrackJets(ctx,std::move(outputTrackJets));
+    return ActsExamples::ProcessCode::SUCCESS;
+  }
+    
+  
+  
+  matchTracks(inputTrajectories,
+              hitParticleMap,
+              simulatedParticles,
+              m_cfg.truthMatchProbability,
+              truthMatchedTrackParameters,
+              associatedTruthParticles);
+
+  //Find the HS Vertex
+  int HS_index  = -1;
+  double maxPt2 = -1;
+  for (size_t ivtx = 0; ivtx < recoVertices.size(); ivtx++) {
+    double tmpPt2 = vtxSumPt2(recoVertices[ivtx]);
+    if (tmpPt2 > maxPt2) {
+      HS_index = ivtx;
+      maxPt2 = tmpPt2;
+    }
+  }
+
+  //Get the HS generated vertex by matching to the reconstructed one
+  
+  std::pair<int,double> hs_idAndProb = getVtxPrimaryID(recoVertices[HS_index],
+                                                       truthMatchedTrackParameters,
+                                                       associatedTruthParticles);
+  
+  ACTS_DEBUG("The HS ID " << hs_idAndProb.first << " and Prob "<< hs_idAndProb.second);
+  
+  //Get all track parameters in the event
   for (const auto& trajectories : inputTrajectories) {
     std::vector<Acts::MultiTrajectoryTraits::IndexType> tips;
     
@@ -69,17 +124,12 @@ ActsExamples::ProcessCode ActsExamples::TrackJetsAlgorithm::execute(
   
   ACTS_INFO("TrackJetsAlgorithm::Number of tracks " << tracks.size());
 
-  const auto& simulatedParticles = m_simulatedParticles(ctx);
-  
-  //Empty set if simParticles is not set in configuration
-  //const auto& simulatedParticles =
-  //(!m_cfg.simParticles.empty()) ? ctx.eventStore.get<SimParticleContainer>(m_cfg.simParticles) :
-      //::boost::container::flat_set<::ActsFatras::Particle,detail::CompareParticleId>();
   
   //Form jets
   std::vector<fastjet::PseudoJet> input_particles;
   int part_idx = -1;
   for (const auto& particle : simulatedParticles) {
+
 
     part_idx++;
 
@@ -94,6 +144,11 @@ ActsExamples::ProcessCode ActsExamples::TrackJetsAlgorithm::execute(
 
     double particle_pt = std::sqrt(particle.fourMomentum()(0)*particle.fourMomentum()(0) +
                                    particle.fourMomentum()(1)*particle.fourMomentum()(1) );
+
+
+    // Remove all particles that do not belong to the HARD SCATTER
+    if ((int)particle.particleId().vertexPrimary() != hs_idAndProb.first)
+      continue;
     
     if (particle_pt < 0.5 * 1_GeV)
       continue;
@@ -116,7 +171,7 @@ ActsExamples::ProcessCode ActsExamples::TrackJetsAlgorithm::execute(
   //----------------------------------------------------------
   std::vector<fastjet::PseudoJet> inclusive_jets = sorted_by_pt(clust_seq.inclusive_jets(m_cfg.tj_minPt));
   
-  TrackJetContainer outputTrackJets;
+  
   outputTrackJets.reserve(inclusive_jets.size());
   
   //Prepare each jet
@@ -154,9 +209,21 @@ ActsExamples::ProcessCode ActsExamples::TrackJetsAlgorithm::execute(
   //Associate the tracks to the jets
   associateTracksToJets(tracks, outputTrackJets, 0.4);
 
-  m_outputTrackJets(ctx,std::move(outputTrackJets));
+
+  //Overlap removal
+  //It could happen that the isolated lepton is not reconstructed but is clustered to the jet.
+  TrackJetContainer ORjets = OverlapRemoval(outputTrackJets,
+                                            truthMatchedTrackParameters,
+                                            associatedTruthParticles);
+                 
+
+  ACTS_INFO("All jets "<<outputTrackJets.size());
+  ACTS_INFO("OR jets  "<<ORjets.size());
   
   
+  //Output the final jet collection
+  //m_outputTrackJets(ctx,std::move(outputTrackJets));
+  m_outputTrackJets(ctx,std::move(ORjets));
   
   return ActsExamples::ProcessCode::SUCCESS;
   
@@ -336,9 +403,8 @@ void ActsExamples::TrackJetsAlgorithm::findJetConstituents(const fastjet::Pseudo
     return;
   
   for (auto& part : simparticles) {
-    
+
     // use fast-jet to get the deltaR 
-    
     fastjet::PseudoJet simpj(part.fourMomentum()(0),
                              part.fourMomentum()(1),
                              part.fourMomentum()(2),
@@ -348,12 +414,87 @@ void ActsExamples::TrackJetsAlgorithm::findJetConstituents(const fastjet::Pseudo
     if (simpj.delta_R(jet) < dR) {
       
       ACTS_DEBUG("SimParticle Component PdgID: " << part.pdg());
-      
       jetconstituents.push_back(part);
       
     }//DeltaR
-    
   }//sim particles
-  
 } //findJets
 
+
+//Return a overlap-removed jet container
+
+ActsExamples::TrackJetContainer ActsExamples::TrackJetsAlgorithm::OverlapRemoval(TrackJetContainer& jets,
+                                                                                 const TrackParametersContainer& tracks,
+                                                                                 const std::vector<SimParticle>& associatedTruthParticles
+                                                                                 ) const {
+  
+  TrackJetContainer orjets;
+  //Find isolated leptons
+  std::vector<Lepton> isolatedLeptons;
+  
+  for (size_t itrack = 0; itrack<tracks.size(); itrack++) {
+
+    //get the pgdID
+    int pdgID = associatedTruthParticles[itrack].pdg();
+
+    //check if it is an electron or a muon
+    if (std::abs(pdgID) == 11 || std::abs(pdgID) == 13)  {
+      
+      Lepton lep(tracks[itrack].momentum(), itrack, pdgID);
+      lep.setIsolation(tracks);
+      
+      if (lep.getIsolation() < 0.1 ) {
+        isolatedLeptons.push_back(lep);
+      }
+    }
+  } //loop on tracks
+
+  //Check the isolated leptons computation
+  
+  for (auto& lep : isolatedLeptons) {
+    ACTS_INFO("Checking isolated lepton pT=" << lep.pt() << "pdgID="<<lep.getPdgId()<<" iso="<<lep.getIsolation());
+  }  
+
+  //Remove overlapping jets  
+  for (auto it = jets.begin(); it !=jets.end(); it++) {
+
+    fastjet::PseudoJet pjet(it->getFourMomentum()(0),
+                          it->getFourMomentum()(1),
+                          it->getFourMomentum()(2),
+                          it->getFourMomentum()(3));
+
+    bool keepJet = true;
+
+    //Loop on the isolated leptons
+    for(auto lep : isolatedLeptons) {
+
+      fastjet::PseudoJet plep(lep.momentum()(0),
+                              lep.momentum()(1),
+                              lep.momentum()(2),
+                              lep.E());
+      
+
+      // If it's an electron, check if I have jet within 0.2 from the electron
+      if (std::abs(lep.getPdgId()) == 11) {
+        
+        if (pjet.delta_R(plep) < 0.2)
+          keepJet = false;
+      }
+      
+      
+      if (std::abs(lep.getPdgId()) == 13) {
+        if (pjet.delta_R(plep) < 0.2 && it->getTracks().size() < 3) {
+          keepJet = false;
+        }
+      }
+    }
+
+    if (keepJet)
+      orjets.push_back(*it);
+    
+  }// loop on jets
+  
+
+  return orjets;
+  
+}

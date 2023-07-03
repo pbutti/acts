@@ -29,7 +29,7 @@ from acts.examples.odd import getOpenDataDetector
 
 parser = argparse.ArgumentParser(description="Full chain with the OpenDataDetector")
 
-parser.add_argument("--events", "-n", help="Number of events", type=int, default=100)
+parser.add_argument("--events", "-n", help="Number of events", type=int, default=50)
 parser.add_argument(
     "--geant4", help="Use Geant4 instead of fatras", action="store_true"
 )
@@ -88,7 +88,7 @@ else:
     addPythia8(
         s,
         hardProcess=["Top:qqbar2ttbar=on"],
-        npileup=50,
+        npileup=0,
         vtxGen=acts.examples.GaussianVertexGenerator(
             stddev=acts.Vector4(0.0125 * u.mm, 0.0125 * u.mm, 55.5 * u.mm, 5.0 * u.ns),
             mean=acts.Vector4(0, 0, 0, 0),
@@ -114,7 +114,9 @@ if g4_simulation:
             absZ=(0, 1e4),
             rho=(0, 1e3),
             pt=(150 * u.MeV, None),
-            removeNeutral=True,
+            removeNeutral=False,
+            removeNonFinal=False,
+            removeNonVisible=False
         ),
         outputDirRoot=outputDir,
         # outputDirCsv=outputDir,
@@ -204,7 +206,7 @@ addTrackJets(
     s,
     field,
     outputDirRoot=outputDir,
-    input_Particles="particles_initial",
+    input_Particles="particles_input",
     outputTrackJets="jets")
 
 

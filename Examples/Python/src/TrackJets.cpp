@@ -57,8 +57,8 @@ void addTrackJets(Context& ctx) {
   
   ACTS_PYTHON_DECLARE_ALGORITHM(
       ActsExamples::TrackJetsAlgorithm, mex,"TrackJetsAlgorithm",
-      inputTrackCollection, inputTrajectories, simParticles,
-      radius, trackMass, tj_minPt, outputTrackJets);
+      inputTrackCollection, inputTrajectories, simParticles,inputMeasurementParticlesMap, recoVertices,
+      truthMatchProbability, radius, trackMass, tj_minPt, outputTrackJets);
 }
 
 } // namespace Acts:Python

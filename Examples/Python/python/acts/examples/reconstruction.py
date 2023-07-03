@@ -1562,6 +1562,7 @@ def addTrackJets(
         input_Trajectories    : Optional[str] = "trajectories",
         input_Vertices        : Optional[str] = "fittedVertices",
         input_Particles : Optional[str] = None,
+        input_MeasurementParticlesMap : Optional[str] = "measurement_particles_map",
         radius : Optional[float] = 0.4,
         trackMass : Optional[float] = 0.135,
         tj_minPt  : Optional[float] = 20.,
@@ -1583,19 +1584,23 @@ def addTrackJets(
         RootEventWriter,
     )
 
-    
+
     trackjetsAlgorithm = TrackJetsAlgorithm(
+        level=acts.logging.INFO,
         inputTrackCollection="",
         inputTrajectories   = input_Trajectories,
         simParticles        = input_Particles,
+        inputMeasurementParticlesMap=input_MeasurementParticlesMap,
+        recoVertices        = "fittedVertices",
+        truthMatchProbability = 0.5,
         radius              = 0.4,
+        trackMass           = 0.1,
         tj_minPt            = 20.,
-        outputTrackJets=outputTrackJets,
-        level=acts.logging.INFO
+        outputTrackJets=outputTrackJets
     )
 
     s.addAlgorithm(trackjetsAlgorithm)
-
+   
     print("outputDirRoot==",outputDirRoot)
     if outputDirRoot is not None:
         outputDirRoot = Path(outputDirRoot)

@@ -13,6 +13,9 @@
 #include "ActsExamples/Framework/WriterT.hpp"
 #include "ActsExamples/Framework/DataHandle.hpp"
 
+#include "Acts/EventData/MultiTrajectoryHelpers.hpp"
+#include "Acts/EventData/VectorMultiTrajectory.hpp"
+#include "Acts/EventData/MultiTrajectory.hpp"
 //This I need to compute the ip2d and ip3d - to do: move this into an algorithm
 #include "Acts/Vertexing/ImpactPointEstimator.hpp" 
 #include "Acts/MagneticField/MagneticFieldProvider.hpp"
@@ -39,6 +42,15 @@ using VertexContainer =
     std::vector<Acts::Vertex<Acts::BoundTrackParameters>>;
 
 namespace ActsExamples {
+
+struct HitInfo {
+  size_t nPix = 0;
+  size_t nPixInnermost = 0;
+  size_t nPixNextToInnermost = 0;
+  size_t nSStrip = 0;
+  size_t nLStrip = 0;
+};
+
 
 
 //All the using.
@@ -97,6 +109,7 @@ class RootEventWriter final : public TrackJetWriter {
   ProcessCode writeT(const AlgorithmContext& ctx,
                      const TrackJetContainer& tp) override;  //tp is not used
 
+  
  private:
   Config m_cfg;             ///< The config class
   std::mutex m_writeMutex;  ///< Mutex used to protect multi-threaded writes
@@ -106,6 +119,9 @@ class RootEventWriter final : public TrackJetWriter {
 
 
   void Clear();
+
+
+  ActsExamples::HitInfo GetHitInformation(const Acts::MultiTrajectoryHelpers::TrajectoryState& trajState) const ;
 
 
   //Handles 
@@ -157,13 +173,13 @@ class RootEventWriter final : public TrackJetWriter {
   std::vector<float> m_trk_t90;       
   std::vector<float> m_trk_t120;      
   std::vector<float> m_trk_t180;      
-  std::vector<float> m_trk_z;         
+  std::vector<float> m_trk_z;
+  
   std::vector<float> m_trk_var_d0;    
   std::vector<float> m_trk_var_z0;    
   std::vector<float> m_trk_var_phi;   
   std::vector<float> m_trk_var_theta; 
   std::vector<float> m_trk_var_qOverP;
-  
   std::vector<float> m_trk_cov_d0z0;       
   std::vector<float> m_trk_cov_d0phi;      
   std::vector<float> m_trk_cov_d0theta;    

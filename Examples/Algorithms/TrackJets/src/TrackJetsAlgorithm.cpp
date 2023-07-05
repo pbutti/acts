@@ -110,13 +110,13 @@ ActsExamples::ProcessCode ActsExamples::TrackJetsAlgorithm::execute(
     std::vector<Acts::MultiTrajectoryTraits::IndexType> tips;
     
     //unordered map of tip:TrackParameters
-    Trajectories::IndexedParameters idx_parameters;
+    //Trajectories::IndexedParameters idx_parameters;
     
     for (auto tip : trajectories.tips()) {
       if (!trajectories.hasTrackParameters(tip))
         continue;
       
-      idx_parameters.emplace(tip, trajectories.trackParameters(tip));
+      //idx_parameters.emplace(tip, trajectories.trackParameters(tip));
       tracks.push_back(trajectories.trackParameters(tip));
       
     }//tip loop

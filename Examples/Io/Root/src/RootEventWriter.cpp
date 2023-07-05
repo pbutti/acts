@@ -164,7 +164,9 @@ ActsExamples::RootEventWriter::RootEventWriter(
     m_outputTree->Branch("track_cov_phiqOverP"  ,&m_trk_cov_phiqOverP);
     m_outputTree->Branch("track_cov_tehtaqOverP",&m_trk_cov_thetaqOverP);
 
-    m_outputTree->Branch("track_numPix1L" ,&m_trk_numPix1L);    
+    // Number of Innermost Pixel Layer Hits
+    m_outputTree->Branch("track_numPix1L" ,&m_trk_numPix1L);
+    // Number of Next to Innermost Pixel Layer Hits
     m_outputTree->Branch("track_numPix2L" ,&m_trk_numPix2L);   
     m_outputTree->Branch("track_numPix"   ,&m_trk_numPix);   
     m_outputTree->Branch("track_numSCT"   ,&m_trk_numSCT);  
@@ -250,24 +252,43 @@ ActsExamples::ProcessCode ActsExamples::RootEventWriter::writeT(
   ACTS_INFO("RootWriter::Number of "<<m_cfg.inputTrajectories << " "<< inputTrajectories.size());
 
   TrackParametersContainer tracks;
+  std::vector<HitInfo> hitInfos;
   
   for (const auto& trajectories : inputTrajectories) {
+
     std::vector<Acts::MultiTrajectoryTraits::IndexType> tips;
-    
-    //unordered map of tip:TrackParameters
-    Trajectories::IndexedParameters idx_parameters;
-    
+
+    //The multiTrajectory
+    const auto&  mj = trajectories.multiTrajectory();
+          
+    //Loop over the trajectory entry index
     for (auto tip : trajectories.tips()) {
       if (!trajectories.hasTrackParameters(tip))
         continue;
-      
-      idx_parameters.emplace(tip, trajectories.trackParameters(tip));
+
+      //Get the track parameters
       tracks.push_back(trajectories.trackParameters(tip));
+
+      //Collect the trajectory summary info
+      auto trajState =
+          Acts::MultiTrajectoryHelpers::trajectoryState(mj, tip);
+      
+      //Check the hits on track and add them to a vector in line with tracks
+      //Kinda idiotic. Define a new track class to keep track parames + track info.
+      
+      hitInfos.push_back(GetHitInformation(trajState));
+      
       
     }//tip loop
   }
   
   ACTS_INFO("RootWriter::Number of tracks" << tracks.size());
+
+  if (tracks.size() != inputTrajectories.size())
+    ACTS_WARNING("Valid trajectories size doesn't match expectation..");
+
+  
+  
   
   // Get the event number
   m_eventNr = ctx.eventNumber;
@@ -344,6 +365,9 @@ ActsExamples::ProcessCode ActsExamples::RootEventWriter::writeT(
     
     m_jet_label.push_back(static_cast<int>(jets[ijets].getLabel()));
     
+    m_jet_isPU.push_back(0);
+    m_jet_isHS.push_back(1);
+    
   } // jets
   
 
@@ -355,9 +379,27 @@ ActsExamples::ProcessCode ActsExamples::RootEventWriter::writeT(
     double signed_d0_err         = 1.;
     double signed_z0SinTheta_err = 1.;
 
+    double covd0         = -999;
+    double covz0         = -999;
+    double covphi        = -999;
+    double covtheta      = -999;
+    double covqOverP     = -999;
+    double covd0z0       = -999;
+    double covd0phi      = -999;
+    double covd0theta    = -999;
+    double covd0qOverP   = -999;
+    double covz0phi      = -999;
+    double covz0theta    = -999;
+    double covz0qOverP   = -999;
+    double covphitheta   = -999;
+    double covphiqOverP  = -999;
+    double covthetaqOverP= -999;
+        
+
     const auto trk_params = tracks[itrk];
+    const auto hit_infos  = hitInfos[itrk];
     const auto params     = trk_params.parameters();
-    const auto cov        = *(trk_params.covariance());
+    
     
 
     //Check if this track belongs to a jet and compute the IPs
@@ -386,86 +428,123 @@ ActsExamples::ProcessCode ActsExamples::RootEventWriter::writeT(
         signed_d0_err         = (*ipAndSigma).sigmad0;
         signed_z0SinTheta_err = (*ipAndSigma).sigmaz0SinTheta;
 
-        if (m_jet_label[ijet]!=5)
-          continue;
-
-        ACTS_DEBUG("jet direction ("<<jetDir[0]<<","<<jetDir[1]<<","<<jetDir[2]);
-        ACTS_DEBUG("vtx pox ("<<reco_vertices[HS_idx].position()[0]<<","<<reco_vertices[HS_idx].position()[1]<<","<<reco_vertices[HS_idx].position()[2]);
-        ACTS_DEBUG("track d0="<< params[Acts::eBoundLoc0]<<"  extr do="<<(*ipAndSigma).IPd0);
-        ACTS_DEBUG("track phi="<< params[Acts::eBoundPhi]);
-
-        double d0 = params[Acts::eBoundLoc0];
-        double phi = params[Acts::eBoundPhi];
-
-        double vs      = std::sin(std::atan2(jetDir[0], jetDir[1]) - phi) * d0;
-
-        ACTS_DEBUG("vs = "<<vs);
-        
       }//track in jet
     }//loop on jets
+    
+    
+    
+    if (trk_params.covariance().has_value()) {
 
-    
-    
-    
-    if (!trk_params.covariance().has_value())
-      continue;
-    
-    float trk_theta = params[Acts::eBoundTheta];
-    float trk_eta   = std::atanh(std::cos(trk_theta));
-    float trk_qop   = params[Acts::eBoundQOverP];
-    float trk_p     = std::abs(1.0 / trk_qop);
-    float trk_pt    = trk_p * std::sin(trk_theta); 
-    
-    m_tracks_prob.push_back(1.);   // todo
-    m_trk_d0.push_back(params[Acts::eBoundLoc0]);             
-    m_trk_z0.push_back(params[Acts::eBoundLoc1]);
-    
-    m_trk_signed_d0.push_back(signed_d0);
-    m_trk_signed_d0sig.push_back(signed_d0 / signed_d0_err);
-    m_trk_signed_z0sinTheta.push_back(signed_z0SinTheta);
-    m_trk_signed_z0sinThetasig.push_back(signed_z0SinTheta / signed_z0SinTheta_err);
-    
-    m_trk_eta.push_back(trk_eta);            
-    m_trk_theta.push_back(trk_theta);          
-    m_trk_phi.push_back(params[Acts::eBoundPhi]);            
-    m_trk_pt.push_back(trk_pt);             
-    m_trk_qOverP.push_back(trk_p);         
-    m_trk_t.push_back(params[Acts::eBoundTime]);              
-    m_trk_t30.push_back(1.);            //todo
-    m_trk_t60.push_back(1.);            //todo
-    m_trk_t90.push_back(1.);            //todo
-    m_trk_t120.push_back(1.);           //todo
-    m_trk_t180.push_back(1.);           //todo
-    m_trk_z.push_back(1.);              //todo
+      const auto& cov  = *trk_params.covariance();
+      
+      float trk_theta = params[Acts::eBoundTheta];
+      float trk_eta   = std::atanh(std::cos(trk_theta));
+      float trk_qop   = params[Acts::eBoundQOverP];
+      float trk_p     = std::abs(1.0 / trk_qop);
+      float trk_pt    = trk_p * std::sin(trk_theta); 
+      
+      m_tracks_prob.push_back(1.);   // todo
+      m_trk_d0.push_back(params[Acts::eBoundLoc0]);             
+      m_trk_z0.push_back(params[Acts::eBoundLoc1]);
+      
+      m_trk_signed_d0.push_back(signed_d0);
+      m_trk_signed_d0sig.push_back(signed_d0 / signed_d0_err);
+      m_trk_signed_z0sinTheta.push_back(signed_z0SinTheta);
+      m_trk_signed_z0sinThetasig.push_back(signed_z0SinTheta / signed_z0SinTheta_err);
 
-    //This give un-initialized warnings
-    
-    /*
-    m_trk_var_d0.push_back(cov(Acts::eBoundLoc0,Acts::eBoundLoc0));         
-    m_trk_var_z0.push_back(cov(Acts::eBoundLoc1,Acts::eBoundLoc1));         
-    m_trk_var_phi.push_back(cov(Acts::eBoundPhi,Acts::eBoundPhi));        
-    m_trk_var_theta.push_back(cov(Acts::eBoundTheta,Acts::eBoundTheta));      
-    m_trk_var_qOverP.push_back(cov(Acts::eBoundQOverP,Acts::eBoundQOverP));     
-    m_trk_cov_d0z0.push_back(cov(Acts::eBoundLoc0,Acts::eBoundLoc1));       
-    m_trk_cov_d0phi.push_back(cov(Acts::eBoundLoc0,Acts::eBoundPhi));      
-    m_trk_cov_d0theta.push_back(cov(Acts::eBoundLoc0,Acts::eBoundTheta));    
-    m_trk_cov_d0qOverP.push_back(cov(Acts::eBoundLoc0,Acts::eBoundQOverP));   
-    m_trk_cov_z0phi.push_back(cov(Acts::eBoundLoc1,Acts::eBoundPhi));      
-    m_trk_cov_z0theta.push_back(cov(Acts::eBoundLoc1,Acts::eBoundTheta));    
-    m_trk_cov_z0qOverP.push_back(cov(Acts::eBoundLoc1,Acts::eBoundQOverP));   
-    m_trk_cov_phitheta.push_back(cov(Acts::eBoundPhi,Acts::eBoundTheta));   
-    m_trk_cov_phiqOverP.push_back(cov(Acts::eBoundPhi,Acts::eBoundQOverP));  
-    m_trk_cov_thetaqOverP.push_back(cov(Acts::eBoundTheta,Acts::eBoundQOverP));
-    */
+      m_trk_numPix1L.push_back(hit_infos.nPixInnermost);
+      m_trk_numPix2L.push_back(hit_infos.nPixNextToInnermost);
+      m_trk_numPix  .push_back(hit_infos.nPix);
+      m_trk_numSCT  .push_back(hit_infos.nSStrip);
+      m_trk_numLSCT .push_back(hit_infos.nLStrip);
+      
+      
+      m_trk_eta.push_back(trk_eta);            
+      m_trk_theta.push_back(trk_theta);          
+      m_trk_phi.push_back(params[Acts::eBoundPhi]);            
+      m_trk_pt.push_back(trk_pt);             
+      m_trk_qOverP.push_back(trk_p);         
+      m_trk_t.push_back(params[Acts::eBoundTime]);              
+      m_trk_t30.push_back(1.);            //todo
+      m_trk_t60.push_back(1.);            //todo
+      m_trk_t90.push_back(1.);            //todo
+      m_trk_t120.push_back(1.);           //todo
+      m_trk_t180.push_back(1.);           //todo
+      m_trk_z.push_back(1.);              //todo
+      
+      //This give un-initialized warnings
+      
+      covd0          = cov(Acts::eBoundLoc0,Acts::eBoundLoc0);
+      covz0          = cov(Acts::eBoundLoc1,Acts::eBoundLoc1);
+      covphi         = cov(Acts::eBoundPhi,Acts::eBoundPhi);
+      covtheta       = cov(Acts::eBoundTheta,Acts::eBoundTheta);
+      covqOverP      = cov(Acts::eBoundQOverP,Acts::eBoundQOverP);
+      covd0z0        = cov(Acts::eBoundLoc0,Acts::eBoundLoc1);
+      covd0phi       = cov(Acts::eBoundLoc0,Acts::eBoundPhi);
+      covd0theta     = cov(Acts::eBoundLoc0,Acts::eBoundTheta);
+      covd0qOverP    = cov(Acts::eBoundLoc0,Acts::eBoundQOverP);
+      covz0phi       = cov(Acts::eBoundLoc1,Acts::eBoundPhi);
+      covz0theta     = cov(Acts::eBoundLoc1,Acts::eBoundTheta);
+      covz0qOverP    = cov(Acts::eBoundLoc1,Acts::eBoundQOverP);
+      covphitheta    = cov(Acts::eBoundPhi,Acts::eBoundTheta);
+      covphiqOverP   = cov(Acts::eBoundPhi,Acts::eBoundQOverP);
+      covthetaqOverP = cov(Acts::eBoundTheta,Acts::eBoundQOverP);
+            
+      
+      m_trk_var_d0.push_back(covd0);
+      m_trk_var_z0.push_back(covz0);         
+      m_trk_var_phi.push_back(covphi);        
+      m_trk_var_theta.push_back(covtheta);      
+      m_trk_var_qOverP.push_back(covqOverP);     
+      m_trk_cov_d0z0.push_back(covd0z0);       
+      m_trk_cov_d0phi.push_back(covd0phi);      
+      m_trk_cov_d0theta.push_back(covd0theta);    
+      m_trk_cov_d0qOverP.push_back(covd0qOverP);   
+      m_trk_cov_z0phi.push_back(covz0phi);      
+      m_trk_cov_z0theta.push_back(covz0theta);    
+      m_trk_cov_z0qOverP.push_back(covz0qOverP);   
+      m_trk_cov_phitheta.push_back(covphitheta);   
+      m_trk_cov_phiqOverP.push_back(covphiqOverP);  
+      m_trk_cov_thetaqOverP.push_back(covthetaqOverP);
+      
+    }// cov has value
   } //Tracks
   
   
   m_outputTree->Fill();
-
+  
   return ProcessCode::SUCCESS;
 }
 
 
+
+ActsExamples::HitInfo ActsExamples::RootEventWriter::GetHitInformation(const Acts::MultiTrajectoryHelpers::TrajectoryState& trajState) const  {
+  
+  HitInfo hit_info;
+
+  for (size_t imeas =  0; imeas < trajState.nMeasurements; imeas++) {
+
+    int volume = trajState.measurementVolume.at(imeas);
+    int layer  = trajState.measurementLayer.at(imeas);
+    if (volume == 16 || volume == 17 || volume == 18) {
+
+      hit_info.nPix++;
+      if (volume == 17) {
+        if (layer==2)
+          hit_info.nPixInnermost++;
+        else if (layer==4)
+          hit_info.nPixNextToInnermost++;
+      }
+    }
+    else if (volume == 23 || volume == 24 || volume == 25) {
+        hit_info.nSStrip++;
+      }
+    else if (volume == 28 || volume == 29 || volume == 30) {
+        hit_info.nLStrip++;
+      }
+  }
+  return hit_info;
+}
 
 void ActsExamples::RootEventWriter::Clear() {
 
@@ -524,5 +603,11 @@ void ActsExamples::RootEventWriter::Clear() {
   m_trk_cov_phitheta.clear();   
   m_trk_cov_phiqOverP.clear();  
   m_trk_cov_thetaqOverP.clear();
+
+  m_trk_numPix1L.clear();
+  m_trk_numPix2L.clear();
+  m_trk_numPix  .clear();
+  m_trk_numSCT  .clear();
+  m_trk_numLSCT .clear();
   
 }

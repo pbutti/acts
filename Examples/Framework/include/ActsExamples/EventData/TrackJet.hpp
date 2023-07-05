@@ -7,8 +7,8 @@
 namespace ActsExamples {
 
 enum jetlabel {
-  unknown = 0,
-  ljet  = 1,
+  unknown = -99,
+  ljet  = 0,
   cjet  = 4,
   bjet  = 5
 };

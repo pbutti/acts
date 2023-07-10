@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/Aenv python3
 import os, argparse, pathlib, contextlib, acts, acts.examples
 from acts.examples.simulation import (
     addParticleGun,
@@ -74,14 +74,14 @@ s = acts.examples.Sequencer(
 if not ttbar:
     addParticleGun(
         s,
-        MomentumConfig(1.0 * u.GeV, 10.0 * u.GeV, transverse=True),
+        MomentumConfig(10.0 * u.GeV, 50.0 * u.GeV, transverse=True),
         EtaConfig(-3.0, 3.0, uniform=True),
-        ParticleConfig(2, acts.PdgParticle.eMuon, randomizeCharge=True),
+        ParticleConfig(10, acts.PdgParticle.eMuon, randomizeCharge=True),
         vtxGen=acts.examples.GaussianVertexGenerator(
-            stddev=acts.Vector4(0.0125 * u.mm, 0.0125 * u.mm, 55.5 * u.mm, 5.0 * u.ns),
+            stddev=acts.Vector4(0.0125 * u.mm, 0.0125 * u.mm, 55.5 * u.mm, 0.180 * u.ns),
             mean=acts.Vector4(0, 0, 0, 0),
         ),
-        multiplicity=50,
+        multiplicity=100,
         rnd=rnd,
     )
 else:
@@ -90,7 +90,7 @@ else:
         hardProcess=["Top:qqbar2ttbar=on"],
         npileup=0,
         vtxGen=acts.examples.GaussianVertexGenerator(
-            stddev=acts.Vector4(0.0125 * u.mm, 0.0125 * u.mm, 55.5 * u.mm, 5.0 * u.ns),
+            stddev=acts.Vector4(0.0125 * u.mm, 0.0125 * u.mm, 55.5 * u.mm, 0.180 * u.ns),
             mean=acts.Vector4(0, 0, 0, 0),
         ),
         rnd=rnd,
@@ -167,7 +167,7 @@ addCKFTracks(
     trackingGeometry,
     field,
     TrackSelectorConfig(
-        pt=(1.0 * u.GeV if ttbar else 0.0, None),
+        pt=(1. * u.GeV if ttbar else 0.0, None),
         absEta=(None, 3.0),
         loc0=(-4.0 * u.mm, 4.0 * u.mm),
         nMeasurementsMin=7,

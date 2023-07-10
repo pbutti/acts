@@ -81,7 +81,7 @@ ActsExamples::RootEventWriter::RootEventWriter(
     throw std::bad_alloc();
   } else {
 
-    m_outputTree->Branch("event_nr", &m_eventNr);
+    m_outputTree->Branch("EventNumber", &m_eventNr);
 
 
     // The Truth HS Vertex
@@ -300,7 +300,7 @@ ActsExamples::ProcessCode ActsExamples::RootEventWriter::writeT(
   unsigned int HS_idx = 0;
 
   //If there are 0 vertices in the event, skip the event
-  if (reco_vertices.size() < 1)
+  if (reco_vertices.size() < 1 || jets.size() < 3)
     return ProcessCode::SUCCESS;
   
   for (size_t ivtx = 0; ivtx < reco_vertices.size(); ivtx++) {
@@ -351,6 +351,16 @@ ActsExamples::ProcessCode ActsExamples::RootEventWriter::writeT(
   }
     
   for (size_t ijets = 0; ijets < jets.size(); ++ijets) {
+
+    //Only store jets with tracks associated to them and with label > -99
+
+    int jLabel = static_cast<int>(jets[ijets].getLabel());
+    int nTracksOnJet =  jets[ijets].getTracks().size();
+
+    if (jLabel < 0 || nTracksOnJet < 1 ) {
+      continue;
+    }
+    
     Acts::Vector4 jet_4mom = jets[ijets].getFourMomentum();
     Acts::Vector3 jet_3mom{jet_4mom[0],jet_4mom[1],jet_4mom[2]};
     float jet_theta = theta(jet_3mom);
@@ -369,8 +379,15 @@ ActsExamples::ProcessCode ActsExamples::RootEventWriter::writeT(
     m_jet_isHS.push_back(1);
     
   } // jets
-  
 
+  //Do not fill the event if there is a jet without tracks associated to it
+  bool keepEvent = true;
+  for (auto links : m_jet_tracks_idx) {
+    if (links.size() == 0)
+      keepEvent = false;
+    break;
+  }
+  
   //Loop on the tracks
   for (size_t itrk = 0; itrk<tracks.size(); itrk++) {
 
@@ -510,8 +527,9 @@ ActsExamples::ProcessCode ActsExamples::RootEventWriter::writeT(
     }// cov has value
   } //Tracks
   
-  
-  m_outputTree->Fill();
+
+  if (keepEvent)
+    m_outputTree->Fill();
   
   return ProcessCode::SUCCESS;
 }

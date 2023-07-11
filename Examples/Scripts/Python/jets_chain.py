@@ -30,6 +30,9 @@ from acts.examples.odd import getOpenDataDetector
 parser = argparse.ArgumentParser(description="Full chain with the OpenDataDetector")
 
 parser.add_argument("--events", "-n", help="Number of events", type=int, default=50)
+
+parser.add_argument("--seed", "-s", help="Seed", type=int, default=42)
+
 parser.add_argument(
     "--geant4", help="Use Geant4 instead of fatras", action="store_true"
 )
@@ -43,6 +46,9 @@ parser.add_argument(
     help="Use the Ml Ambiguity Solver instead of the classical one",
     action="store_true",
 )
+
+
+
 
 args = vars(parser.parse_args())
 
@@ -63,7 +69,12 @@ detector, trackingGeometry, decorators = getOpenDataDetector(
     geoDir, mdecorator=oddMaterialDeco
 )
 field = acts.ConstantBField(acts.Vector3(0.0, 0.0, 2.0 * u.T))
-rnd = acts.examples.RandomNumbers(seed=42)
+
+seed = args["seed"]
+print("seed", seed)
+
+
+rnd = acts.examples.RandomNumbers(seed=seed)
 
 s = acts.examples.Sequencer(
     events=args["events"],
@@ -94,7 +105,7 @@ else:
             mean=acts.Vector4(0, 0, 0, 0),
         ),
         rnd=rnd,
-        outputDirRoot=outputDir,
+        #outputDirRoot=outputDir,
         # outputDirCsv=outputDir,
     )
 if g4_simulation:
@@ -118,7 +129,7 @@ if g4_simulation:
             removeNonFinal=False,
             removeNonVisible=False
         ),
-        outputDirRoot=outputDir,
+        #outputDirRoot=outputDir,
         # outputDirCsv=outputDir,
         rnd=rnd,
         killVolume=acts.Volume.makeCylinderVolume(r=1.1 * u.m, halfZ=3.0 * u.m),
@@ -136,7 +147,7 @@ else:
         )
         if ttbar
         else ParticleSelectorConfig(),
-        outputDirRoot=outputDir,
+        #outputDirRoot=outputDir,
         # outputDirCsv=outputDir,
         rnd=rnd,
     )
@@ -146,7 +157,7 @@ addDigitization(
     trackingGeometry,
     field,
     digiConfigFile=oddDigiConfig,
-    outputDirRoot=outputDir,
+    #outputDirRoot=outputDir,
     # outputDirCsv=outputDir,
     rnd=rnd,
 )
@@ -159,7 +170,7 @@ addSeeding(
     if ttbar
     else TruthSeedRanges(),
     geoSelectionConfigFile=oddSeedingSel,
-    outputDirRoot=outputDir,
+    #outputDirRoot=outputDir,
 )
 
 addCKFTracks(
@@ -172,7 +183,7 @@ addCKFTracks(
         loc0=(-4.0 * u.mm, 4.0 * u.mm),
         nMeasurementsMin=7,
     ),
-    outputDirRoot=outputDir,
+    #outputDirRoot=outputDir,
     # outputDirCsv=outputDir,
 )
 
@@ -180,7 +191,7 @@ if ambiguity_MLSolver:
     addAmbiguityResolutionML(
         s,
         AmbiguityResolutionMLConfig(nMeasurementsMin=7),
-        outputDirRoot=outputDir,
+        #outputDirRoot=outputDir,
         # outputDirCsv=outputDir,
         onnxModelFile=os.path.dirname(__file__)
         + "/MLAmbiguityResolution/duplicateClassifier.onnx",
@@ -191,7 +202,7 @@ else:
         AmbiguityResolutionConfig(
             maximumSharedHits=3, maximumIterations=10000, nMeasurementsMin=7
         ),
-        outputDirRoot=outputDir,
+        #outputDirRoot=outputDir,
         # outputDirCsv=outputDir,
     )
 
@@ -199,7 +210,7 @@ addVertexFitting(
     s,
     field,
     vertexFinder=VertexFinder.Iterative,
-    outputDirRoot=outputDir,
+    #outputDirRoot=outputDir,
 )
 
 addTrackJets(

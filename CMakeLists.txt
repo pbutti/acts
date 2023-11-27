@@ -202,8 +202,8 @@ set(_acts_tbb_version 2020.1)
 set(_acts_boost_recommended_version 1.78.0)
 #set(FASTJET_DIR /sw/fastjet-3.4.0)
 #set(MCUTILS     /sw/mcutils)
-set(FASTJET_DIR  /afs/cern.ch/user/p/pibutti/sw/fastjet-3.4.0)
-set(MCUTILS   /afs/cern.ch/user/p/pibutti/sw/mcutils)
+set(FASTJET_DIR  /cvmfs/sft.cern.ch/lcg/releases/LCG_103/fastjet/3.4.0p1/x86_64-centos7-gcc11-opt/)
+set(MCUTILS   /afs/cern.ch/work/l/losanti/public/mcutils/)
 
 
 # required packages

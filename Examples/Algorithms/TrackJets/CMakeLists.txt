@@ -15,7 +15,7 @@ target_link_libraries(
     ActsCore
     ActsExamplesFramework
     #fastjet
-    ${FASTJET_DIR}/build/lib/libfastjet.so
+    ${FASTJET_DIR}/lib/libfastjet.so
   PRIVATE ROOT::Core)
 
 install(

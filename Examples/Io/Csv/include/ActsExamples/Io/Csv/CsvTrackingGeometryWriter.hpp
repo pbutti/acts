@@ -54,6 +54,8 @@ class CsvTrackingGeometryWriter : public IWriter {
     bool writeSurfaceGrid = true;
     /// Write the layer volume representation
     bool writeLayerVolume = true;
+    /// Write the navigation layers
+    bool writeNavigation = false;
     /// Whether to write the per-event file.
     bool writePerEvent = false;
   };

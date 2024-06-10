@@ -74,6 +74,8 @@ void fillSurfaceData(SurfaceData& data, const Acts::Surface& surface,
   data.boundary_id = surface.geometryId().boundary();
   data.layer_id = surface.geometryId().layer();
   data.module_id = surface.geometryId().sensitive();
+  data.approach_id = surface.geometryId().approach();
+  data.passive_id = surface.geometryId().passive();
   // center position
   auto center = surface.center(geoCtx);
   data.cx = center.x() / Acts::UnitConstants::mm;
@@ -225,6 +227,10 @@ void writeVolume(SurfaceWriter& sfWriter, SurfaceGridWriter& sfGridWriter,
                  const Acts::TrackingVolume& volume, bool writeSensitive,
                  bool writeBoundary, bool writeSurfaceGrid,
                  bool writeLayerVolume, const Acts::GeometryContext& geoCtx) {
+
+  bool writePassive = false;
+  bool writeNavigation = false;
+  
   // process all layers that are directly stored within this volume
   if (volume.confinedLayers() != nullptr) {
     const auto& vTransform = volume.transform();
@@ -274,7 +280,7 @@ void writeVolume(SurfaceWriter& sfWriter, SurfaceGridWriter& sfGridWriter,
       if (layer->layerType() == Acts::navigation) {
         ++layerIdx;
         // For a correct layer volume setup, we need the navigation layers
-        if (writeLayerVolume) {
+	if (writeNavigation) {
           writeSurface(sfWriter, layer->surfaceRepresentation(), geoCtx);
         }
         continue;
@@ -335,7 +341,7 @@ void writeVolume(SurfaceWriter& sfWriter, SurfaceGridWriter& sfGridWriter,
               }
             }
           }
-        } else {
+        } else if (writePassive) {
           // Write the passive surface
           writeSurface(sfWriter, layer->surfaceRepresentation(), geoCtx);
         }

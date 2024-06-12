@@ -146,13 +146,13 @@ ActsExamples::RootAthInputReader::RootAthInputReader(
   m_inputchain->SetBranchAddress("SPhl_topstrip", SPhl_topstrip, &b_SPhl_topstrip);
   m_inputchain->SetBranchAddress("SPhl_botstrip", SPhl_botstrip, &b_SPhl_botstrip);
   m_inputchain->SetBranchAddress("SPtopStripDirection",
-				 SPtopStripDirection, &b_SPtopStripDirection);
+				 &SPtopStripDirection, &b_SPtopStripDirection);
   m_inputchain->SetBranchAddress("SPbottomStripDirection",
-				 SPbottomStripDirection, &b_SPbottomStripDirection);
+				 &SPbottomStripDirection, &b_SPbottomStripDirection);
   m_inputchain->SetBranchAddress("SPstripCenterDistance",
-				 SPstripCenterDistance, &b_SPstripCenterDistance);
+				 &SPstripCenterDistance, &b_SPstripCenterDistance);
   m_inputchain->SetBranchAddress("SPtopStripCenterPosition",
-				 SPtopStripCenterPosition, &b_SPtopStripCenterPosition);
+				 &SPtopStripCenterPosition, &b_SPtopStripCenterPosition);
   
 
   
@@ -236,14 +236,19 @@ ActsExamples::ProcessCode ActsExamples::RootAthInputReader::read(const ActsExamp
   // Prepare pixel space points
   SimSpacePointContainer pixelSpacePoints;
 
+  // Prepare Strip space Points
+  SimSpacePointContainer stripSpacePoints;
+
   // Prepare space-point container
   // They contain both pixel and SCT space points
   SimSpacePointContainer spacePoints;
 
-  
-  
+
   ACTS_DEBUG("Found "<< nSP <<" space points");
   
+  // Bookkeeping of strip space points
+  int stripsp = 0;
+
   //Loop on space points
   for (int isp=0; isp<nSP;isp++) {
     
@@ -269,44 +274,53 @@ ActsExamples::ProcessCode ActsExamples::RootAthInputReader::read(const ActsExamp
 
     } else  { // Strip 
 
+      
       float hl_topstrip = SPhl_topstrip[isp];
       float hl_botstrip = SPhl_botstrip[isp];
-      //std::vector<float> topStripDir = (*SPtopStripDirection)[isp];
 
+      ACTS_DEBUG("Checking SP:: "<<isp<< " strip sp:"<<stripsp);  
+      
     
-      //Acts::Vector3 topStripDirection{
-      //  topStripDir.at(0),
-      //  topStripDir.at(1),
-      //  topStripDir.at(2)};
-/*
-      Acts::Vector3 botStripDirection{
-        SPbottomStripDirection[isp].at(0),
-        SPbottomStripDirection[isp].at(1),
-        SPbottomStripDirection[isp]->at(2)
-      };
+      Acts::Vector3 topStripDirection{
+        ((*SPtopStripDirection)[stripsp])[0],
+        ((*SPtopStripDirection)[stripsp])[1],
+        ((*SPtopStripDirection)[stripsp])[2]};
 
-      Acts::Vector3 stripCenterDistance{
-        SPstripCenterDistance[isp].at(0),
-        SPstripCenterDistance[isp].at(1),
-        SPstripCenterDistance[isp].at(2)
-      };
-
-      Acts::Vector3 topStripCenterPosition{
-        SPtopStripCenterPosition[isp].at(0),
-        SPtopStripCenterPosition[isp].at(1),
-        SPtopStripCenterPosition[isp].at(2)
-      };
+      ACTS_DEBUG("Top Strip Direction "<<topStripDirection);
 
       
+      Acts::Vector3 botStripDirection{
+        ((*SPbottomStripDirection)[stripsp])[0],
+        ((*SPbottomStripDirection)[stripsp])[1],
+        ((*SPbottomStripDirection)[stripsp])[2]
+      };
 
+      ACTS_DEBUG("Bot Strip Direction "<<botStripDirection);
+      
+      Acts::Vector3 stripCenterDistance{
+        ((*SPstripCenterDistance)[stripsp])[0],
+        ((*SPstripCenterDistance)[stripsp])[1],
+        ((*SPstripCenterDistance)[stripsp])[2]
+      };
+
+
+      
+      Acts::Vector3 topStripCenterPosition{
+        ((*SPtopStripCenterPosition)[stripsp])[0],
+        ((*SPtopStripCenterPosition)[stripsp])[1],
+        ((*SPtopStripCenterPosition)[stripsp])[2]
+      };
+      
       stripSpacePoints.emplace_back(globalPos, std::nullopt,
         sp_covr, sp_covz, std::nullopt,sLinks,
         hl_topstrip, hl_botstrip,
         topStripDirection, botStripDirection,
         stripCenterDistance, topStripCenterPosition
         );
-      */
+      
+      
 
+      stripsp++;
     }
     
     spacePoints.emplace_back(globalPos, std::nullopt,
@@ -319,10 +333,14 @@ ActsExamples::ProcessCode ActsExamples::RootAthInputReader::read(const ActsExamp
   ACTS_DEBUG("Created"<<pixelSpacePoints.size()<<" "<<
       m_cfg.outputPixelSpacePoints<< "space points");
 
+  ACTS_DEBUG("Created"<<stripSpacePoints.size()<<" "<<
+      m_cfg.outputStripSpacePoints<< "space points");
+
   ACTS_DEBUG("Created "<<spacePoints.size() <<" " <<
 	     m_cfg.outputSpacePoints << "space points");
   
   m_outputPixelSpacePoints(ctx,std::move(pixelSpacePoints));
+  m_outputStripSpacePoints(ctx,std::move(stripSpacePoints));
   m_outputSpacePoints(ctx, std::move(spacePoints));
   
   return ProcessCode::SUCCESS;

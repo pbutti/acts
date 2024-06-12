@@ -579,6 +579,7 @@ def addStandardSeeding(
     seedFinderOptionsArg: SeedFinderOptionsArg,
     seedFilterConfigArg: SeedFilterConfigArg,
     spacePointGridConfigArg: SpacePointGridConfigArg,
+    outputSeeds: str = "seeds",
     logLevel: acts.logging.Level = None,
 ):
     """adds standard seeding
@@ -718,7 +719,7 @@ def addStandardSeeding(
     seedingAlg = acts.examples.SeedingAlgorithm(
         level=logLevel,
         inputSpacePoints=[spacePoints],
-        outputSeeds="seeds",
+        outputSeeds=outputSeeds,
         **acts.examples.defaultKWArgs(
             allowSeparateRMax=seedingAlgorithmConfigArg.allowSeparateRMax,
             zBinNeighborsTop=seedingAlgorithmConfigArg.zBinNeighborsTop,

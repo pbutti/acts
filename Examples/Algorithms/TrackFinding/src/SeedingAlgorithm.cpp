@@ -194,9 +194,25 @@ ActsExamples::SeedingAlgorithm::SeedingAlgorithm(
       m_cfg.numPhiNeighbors, m_cfg.zBinNeighborsBottom);
   m_topBinFinder = std::make_unique<const Acts::GridBinFinder<2ul>>(
       m_cfg.numPhiNeighbors, m_cfg.zBinNeighborsTop);
-
+  
   m_cfg.seedFinderConfig.seedFilter =
       std::make_unique<Acts::SeedFilter<SimSpacePoint>>(m_cfg.seedFilterConfig);
+  
+  if (m_cfg.useExperimentCuts) {
+    
+    m_cfg.seedFinderConfig.experimentCuts.connect(
+						  [](const void*,float bottomRadius, float cotTheta) -> bool {
+						    float fastTrackingRMin = 50.;
+						    float fastTrackingCotThetaMax = 1.5;
+						    if (bottomRadius > fastTrackingRMin and
+							(cotTheta > fastTrackingCotThetaMax or
+							 cotTheta < -fastTrackingCotThetaMax)) {
+						      return false;
+						    }
+						    return true;
+						  });
+  }
+  
   m_seedFinder =
       Acts::SeedFinder<SimSpacePoint,
                        Acts::CylindricalSpacePointGrid<SimSpacePoint>>(

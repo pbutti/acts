@@ -48,22 +48,26 @@ class SeedingAlgorithm final : public IAlgorithm {
     std::vector<std::string> inputSpacePoints;
     /// Output track seed collection.
     std::string outputSeeds;
-
+    
     Acts::SeedFilterConfig seedFilterConfig;
     Acts::SeedFinderConfig<SimSpacePoint> seedFinderConfig;
     Acts::CylindricalSpacePointGridConfig gridConfig;
     Acts::CylindricalSpacePointGridOptions gridOptions;
     Acts::SeedFinderOptions seedFinderOptions;
-
+    
     // allow for different values of rMax in gridConfig and seedFinderConfig
     bool allowSeparateRMax = false;
-
+    
     // vector containing the map of z bins in the top and bottom layers
     std::vector<std::pair<int, int>> zBinNeighborsTop;
     std::vector<std::pair<int, int>> zBinNeighborsBottom;
     // number of phiBin neighbors at each side of the current bin that will be
     // used to search for SPs
     int numPhiNeighbors = 1;
+    
+    // switch for usage of Athena fast tracking cuts
+    bool useExperimentCuts = false;
+
   };
 
   /// Construct the seeding algorithm.

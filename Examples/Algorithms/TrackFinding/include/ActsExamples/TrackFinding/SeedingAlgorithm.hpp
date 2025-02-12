@@ -203,7 +203,7 @@ class SeedingAlgorithm final : public IAlgorithm {
   }
   
   static inline bool itkFastTrackingCuts(float bottomRadius, float cotTheta) {
-    static float rMin = 50.;
+    static float rMin = 45.;
     static float cotThetaMax = 1.5;
 
     if (bottomRadius < rMin &&
@@ -217,7 +217,7 @@ class SeedingAlgorithm final : public IAlgorithm {
     // At small r we remove points beyond |z| > 200.
     float r = sp.radius();
     float zabs = std::abs(sp.z());
-    if (zabs > 200. && r < 50.) {
+    if (zabs > 200. && r < 45.) {
       return false;
     }
 

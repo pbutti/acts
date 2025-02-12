@@ -22,10 +22,15 @@
 #include <limits>
 #include <ostream>
 #include <stdexcept>
+#include <unordered_map>
+
+
+
 
 using namespace Acts::HashedStringLiteral;
 
 namespace ActsExamples {
+  
 struct AlgorithmContext;
 }  // namespace ActsExamples
 
@@ -179,7 +184,12 @@ ActsExamples::SeedingAlgorithm::SeedingAlgorithm(
     // This function will be applied to the doublet compatibility selection
     m_cfg.seedFinderConfig.experimentCuts.connect<itkFastTrackingCuts>();
   }
-
+  
+  // Use the doublet module map
+  
+  loadModuleMap();
+    
+  
   using SpacePointProxy_type = typename Acts::SpacePointContainer<
       ActsExamples::SpacePointContainer<std::vector<const SimSpacePoint*>>,
       Acts::detail::RefHolder>::SpacePointProxyType;
@@ -301,3 +311,7 @@ ActsExamples::ProcessCode ActsExamples::SeedingAlgorithm::execute(
   m_outputSeeds(ctx, std::move(SeedContainerForStorage));
   return ActsExamples::ProcessCode::SUCCESS;
 }
+
+
+
+

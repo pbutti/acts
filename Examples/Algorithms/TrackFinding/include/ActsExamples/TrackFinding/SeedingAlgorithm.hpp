@@ -29,6 +29,10 @@
 #include <utility>
 #include <vector>
 
+#include <ostream>
+#include "TFile.h"
+#include "TTree.h"
+
 namespace Acts {
 template <std::size_t>
 class GridBinFinder;
@@ -92,6 +96,8 @@ class SeedingAlgorithm final : public IAlgorithm {
   /// Const access to the config
   const Config& config() const { return m_cfg; }
 
+
+    
  private:
   using SpacePointProxy_t = typename Acts::SpacePointContainer<
       ActsExamples::SpacePointContainer<std::vector<const SimSpacePoint*>>,
@@ -110,6 +116,92 @@ class SeedingAlgorithm final : public IAlgorithm {
 
   WriteDataHandle<SimSeedContainer> m_outputSeeds{this, "OutputSeeds"};
 
+  
+  static inline void loadModuleMap() {
+    
+
+    
+    
+    
+
+    std::unique_ptr<TFile> mapfile = std::make_unique<TFile>("/mnt/hdd1/pibutti/data/GNN_ModuleMaps/ModuleMap_closest_all_dr_rel24_89809evts_double.doublets.tol1e-10.root");
+  
+    TTree* ttree = static_cast<TTree*>(mapfile->Get("TreeModuleDoublet"));
+    
+    double        detamax_12;
+    double        detamin_12;
+    double        dphimax_12;
+    double        dphimin_12;
+    double        phiSlopemax_12;
+    double        phiSlopemin_12;
+    double        z0max_12;
+    double        z0min_12;
+    uint64_t      Module1;
+    uint64_t      Module2;
+    double        z0sum_12;
+    double        dphisum_12;
+    double        phiSlopesum_12;
+    double        detasum_12;
+    double        z0sumSq_12;
+    double        dphisumSq_12;
+    double        phiSlopesumSq_12;
+    double        detasumSq_12;
+    
+    
+    TBranch        *b_detamax_12;
+    TBranch        *b_detamin_12;
+    TBranch        *b_dphimax_12;
+    TBranch        *b_dphimin_12;
+    TBranch        *b_phiSlopemax_12;
+    TBranch        *b_phiSlopemin_12;
+    TBranch        *b_z0max_12;
+    TBranch        *b_z0min_12;
+    TBranch        *b_Module1;
+    TBranch        *b_Module2;
+    TBranch        *b_z0sum_12;
+    TBranch        *b_dphisum_12;
+    TBranch        *b_phiSlopesum_12;
+    TBranch        *b_detasum_12;
+    TBranch        *b_z0sumSq_12;
+    TBranch        *b_dphisumSq_12;
+    TBranch        *b_phiSlopesumSq_12;
+    TBranch        *b_detasumSq_12;
+    
+    ttree->SetBranchAddress("detamax_12", &detamax_12, &b_detamax_12);
+    ttree->SetBranchAddress("detamin_12", &detamin_12, &b_detamin_12);
+    ttree->SetBranchAddress("dphimax_12", &dphimax_12, &b_dphimax_12);
+    ttree->SetBranchAddress("dphimin_12", &dphimin_12, &b_dphimin_12);
+    ttree->SetBranchAddress("phiSlopemax_12", &phiSlopemax_12, &b_phiSlopemax_12);
+    ttree->SetBranchAddress("phiSlopemin_12", &phiSlopemin_12, &b_phiSlopemin_12);
+    ttree->SetBranchAddress("z0max_12", &z0max_12, &b_z0max_12);
+    ttree->SetBranchAddress("z0min_12", &z0min_12, &b_z0min_12);
+    ttree->SetBranchAddress("Module1", &Module1, &b_Module1);
+    ttree->SetBranchAddress("Module2", &Module2, &b_Module2);
+    ttree->SetBranchAddress("z0sum_12", &z0sum_12, &b_z0sum_12);
+    ttree->SetBranchAddress("dphisum_12", &dphisum_12, &b_dphisum_12);
+    ttree->SetBranchAddress("phiSlopesum_12", &phiSlopesum_12, &b_phiSlopesum_12);
+    ttree->SetBranchAddress("detasum_12", &detasum_12, &b_detasum_12);
+    ttree->SetBranchAddress("z0sumSq_12", &z0sumSq_12, &b_z0sumSq_12);
+    ttree->SetBranchAddress("dphisumSq_12", &dphisumSq_12, &b_dphisumSq_12);
+    ttree->SetBranchAddress("phiSlopesumSq_12", &phiSlopesumSq_12, &b_phiSlopesumSq_12);
+    ttree->SetBranchAddress("detasumSq_12", &detasumSq_12, &b_detasumSq_12);
+    
+    
+    Long64_t nentries = ttree->GetEntriesFast();
+    //std::cout<<"Number of entries = "<<nentries<<std::endl;
+
+    std::unordered_map<std::pair<uint64_t,uint64_t>,bool,Acts::pairHash> doubletmap;
+    
+    for (Long64_t jentry=0; jentry<nentries;jentry++) {
+      ttree->GetEntry(jentry);
+      
+      doubletmap[std::make_pair(Module1, Module2)] = true;
+      
+    }
+    //std::cout<<"PF: Size of doublet map "<<doubletmap.size()<<std::endl;
+    
+  }
+  
   static inline bool itkFastTrackingCuts(float bottomRadius, float cotTheta) {
     static float rMin = 50.;
     static float cotThetaMax = 1.5;

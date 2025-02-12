@@ -17,9 +17,34 @@
 #include <memory>
 #include <numbers>
 #include <vector>
+#include <unordered_map>
 
 namespace Acts {
 
+
+  struct pairHash {
+    std::size_t operator()(const std::pair<uint64_t, uint64_t>& p) const {
+      uint64_t hash1 = p.first * 0x9e3779b97f4a7c15;
+      uint64_t hash2 = p.second * 0xc6a4a7935bd1e995;
+      return (hash1 ^ hash2) >> 1;  // XOR-mix and shift
+    }
+  };
+  
+
+  struct PairHash {
+    template <typename T1, typename T2>
+    size_t operator () (const std::pair<T1, T2>& p) const {
+      const size_t prime = 0x9e3779b9;  // A large prime number (Golden ratio constant)
+      
+      size_t h1 = std::hash<T1>{}(p.first);
+      size_t h2 = std::hash<T2>{}(p.second);
+      
+      // Combine the two hash values using a prime number and XOR operation
+      return h1 ^ (h2 + prime + (h1 << 6) + (h1 >> 2));
+    }
+  };
+  
+  
 // forward declaration to avoid cyclic dependence
 template <typename T>
 class SeedFilter;
@@ -180,7 +205,10 @@ struct SeedFinderConfig {
 
   Delegate<bool(const SpacePoint&)> spacePointSelector{
       DelegateFuncTag<voidSpacePointSelector>{}};
-
+  
+  //std::unique_ptr<std::unordered_map<std::pair<int,int>,int, PairHash>> doublet_mmap;
+  
+  
   static bool voidSpacePointSelector(const SpacePoint& /*sp*/) { return true; }
 
   /// Tolerance parameter used to check the compatibility of space-point
@@ -239,7 +267,7 @@ struct SeedFinderConfig {
     config.rAlign /= 1_mm;
 
     config.toleranceParam /= 1_mm;
-
+    
     return config;
   }
   SeedFinderConfig calculateDerivedQuantities() const {

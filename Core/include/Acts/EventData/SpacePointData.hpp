@@ -48,6 +48,7 @@ class SpacePointData {
   float phi(const std::size_t idx) const;
   float varianceZ(const std::size_t idx) const;
   float varianceR(const std::size_t idx) const;
+  uint64_t modId(const std::size_t idx) const;
 
   /// @brief Setters
   void setX(const std::size_t idx, const float value);
@@ -57,6 +58,7 @@ class SpacePointData {
   void setPhi(const std::size_t idx, const float value);
   void setVarianceZ(const std::size_t idx, const float value);
   void setVarianceR(const std::size_t idx, const float value);
+  void setModId(const std::size_t idx, const uint64_t value);
 
   /// @brief Resize vectors
   void resize(const std::size_t n, bool resizeDynamic = false);
@@ -88,6 +90,7 @@ class SpacePointData {
   std::vector<float> m_phi{};
   std::vector<float> m_varianceR{};
   std::vector<float> m_varianceZ{};
+  std::vector<uint64_t> m_modId{};
 
   /// dynamic variables
   std::vector<Acts::Vector3> m_topStripVector{};

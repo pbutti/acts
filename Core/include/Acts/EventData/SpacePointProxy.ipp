@@ -61,6 +61,12 @@ float SpacePointProxy<container_t>::varianceZ() const {
 }
 
 template <typename container_t>
+uint64_t SpacePointProxy<container_t>::modId() const {
+  return container().modId(m_index);
+}
+
+
+template <typename container_t>
 const Acts::Vector3& SpacePointProxy<container_t>::topStripVector() const {
   return container().topStripVector(m_index);
 }

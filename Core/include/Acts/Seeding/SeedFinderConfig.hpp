@@ -20,7 +20,20 @@
 #include <unordered_map>
 
 namespace Acts {
+  
 
+  struct commutativePairHash {
+    std::size_t operator()(const std::pair<uint64_t, uint64_t>& p) const {
+        uint64_t a = p.first;
+        uint64_t b = p.second;
+        if (a > b) std::swap(a, b);  // Ensure order independence
+
+        uint64_t hash1 = a * 0x9e3779b97f4a7c15;
+        uint64_t hash2 = b * 0xc6a4a7935bd1e995;
+        return (hash1 ^ hash2) >> 1;  // XOR-mix and shift
+    }
+};
+  
 
   struct pairHash {
     std::size_t operator()(const std::pair<uint64_t, uint64_t>& p) const {
@@ -43,7 +56,10 @@ namespace Acts {
       return h1 ^ (h2 + prime + (h1 << 6) + (h1 >> 2));
     }
   };
-  
+
+  using doubletMap = std::unordered_map<std::pair<uint64_t,uint64_t>,bool,Acts::commutativePairHash>;
+  using simple_doubletMap = std::unordered_map<uint64_t,bool>;
+      
   
 // forward declaration to avoid cyclic dependence
 template <typename T>

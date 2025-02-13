@@ -246,6 +246,7 @@ SeedFinder<external_spacepoint_t, grid_t, platform_t>::getCompatibleDoublets(
   const float zM = mediumSP.z();
   const float varianceRM = mediumSP.varianceR();
   const float varianceZM = mediumSP.varianceZ();
+  const uint64_t idM = mediumSP.modId();
 
   float vIPAbs = 0;
   if (m_config.interactionPointCut) {
@@ -291,6 +292,9 @@ SeedFinder<external_spacepoint_t, grid_t, platform_t>::getCompatibleDoublets(
     for (; min_itr != otherSPs.end(); ++min_itr) {
       const external_spacepoint_t* otherSP = *min_itr;
 
+      //Check if the module map rejects this doublet
+      const uint64_t idOtherSP = otherSP->modId();
+
       if constexpr (isBottomCandidate) {
         deltaR = (rM - otherSP->radius());
 
@@ -307,12 +311,20 @@ SeedFinder<external_spacepoint_t, grid_t, platform_t>::getCompatibleDoublets(
         }
       }
 
+      bool useMap=false;
+      
+      if (useMap && !m_doubletmap.contains(m_hasher(std::make_pair(idOtherSP,idM)))) {
+	//std::cout<<"PF::ModuleMap Rejected point"<<std::endl;
+	//std::cout<<"PF::Other="<<idOtherSP<<" mid="<<idM<<" hash="<<hash<<std::endl;
+	continue;
+      }
+      
       if constexpr (isBottomCandidate) {
         deltaZ = (zM - otherSP->z());
       } else {
         deltaZ = (otherSP->z() - zM);
       }
-
+      
       // the longitudinal impact parameter zOrigin is defined as (zM - rM *
       // cotTheta) where cotTheta is the ratio Z/R (forward angle) of space
       // point duplet but instead we calculate (zOrigin * deltaR) and multiply
@@ -323,7 +335,7 @@ SeedFinder<external_spacepoint_t, grid_t, platform_t>::getCompatibleDoublets(
           zOriginTimesDeltaR > m_config.collisionRegionMax * deltaR) {
         continue;
       }
-
+      
       // if interactionPointCut is false we apply z cuts before coordinate
       // transformation to avoid unnecessary calculations. If
       // interactionPointCut is true we apply the curvature cut first because it

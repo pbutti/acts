@@ -129,6 +129,14 @@ class SeedFinder {
                            const sp_range_t& topSPs,
                            const Acts::Range1D<float>& rMiddleSPRange) const;
 
+
+  // Just use it as copy for the moment
+
+  //doubletMap m_doubletmap;
+  simple_doubletMap m_doubletmap;
+
+  Acts::commutativePairHash m_hasher;
+  
  private:
   /// Given a middle space point candidate, get the proper radius validity range
   /// In case the radius range changes according to the z-bin we need to

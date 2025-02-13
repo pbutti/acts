@@ -175,7 +175,7 @@ ActsExamples::SeedingAlgorithm::SeedingAlgorithm(
       }
     }
   }
-
+  
   if (m_cfg.useExtraCuts) {
     // This function will be applied to select space points during grid filling
     m_cfg.seedFinderConfig.spacePointSelector
@@ -184,11 +184,6 @@ ActsExamples::SeedingAlgorithm::SeedingAlgorithm(
     // This function will be applied to the doublet compatibility selection
     m_cfg.seedFinderConfig.experimentCuts.connect<itkFastTrackingCuts>();
   }
-  
-  // Use the doublet module map
-  
-  loadModuleMap();
-    
   
   using SpacePointProxy_type = typename Acts::SpacePointContainer<
       ActsExamples::SpacePointContainer<std::vector<const SimSpacePoint*>>,
@@ -203,6 +198,18 @@ ActsExamples::SeedingAlgorithm::SeedingAlgorithm(
       Acts::SeedFinder<SpacePointProxy_type,
                        Acts::CylindricalSpacePointGrid<SpacePointProxy_type>>(
           m_cfg.seedFinderConfig, logger().cloneWithSuffix("SeedFinder"));
+
+  //Use a silly copy for the moment
+  m_seedFinder.m_doubletmap = loadModuleMap();
+
+  auto print_key_value = [](const auto& key, const auto& value)
+  {
+    std::cout << "Key:[" << key<<"] Value:[" << value << "]\n";
+  };
+  
+  //for (auto& kv : m_seedFinder.m_doubletmap)
+  //  print_key_value(kv.first,kv.second);
+  
 }
 
 ActsExamples::ProcessCode ActsExamples::SeedingAlgorithm::execute(

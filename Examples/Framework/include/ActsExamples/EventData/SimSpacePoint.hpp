@@ -101,6 +101,7 @@ class SimSpacePoint {
   constexpr double r() const { return m_rho; }
   constexpr double varianceR() const { return m_varianceRho; }
   constexpr double varianceZ() const { return m_varianceZ; }
+  constexpr uint64_t modId() const { return m_modId; }
   constexpr std::optional<double> varianceT() const { return m_varianceT; }
 
   const boost::container::static_vector<Acts::SourceLink, 2>& sourceLinks()
@@ -122,6 +123,9 @@ class SimSpacePoint {
     return m_validDoubleMeasurementDetails;
   }
 
+  inline void setModId(uint64_t id) {m_modId = id;}
+  
+  
  private:
   // Global position
   double m_x;
@@ -136,6 +140,9 @@ class SimSpacePoint {
   // SourceLinks of the corresponding measurements. A Pixel (strip) SP has one
   // (two) sourceLink(s).
   boost::container::static_vector<Acts::SourceLink, 2> m_sourceLinks;
+
+  // Single Module ID for Athena Pixel Spacepoints
+  uint64_t m_modId;
 
   // half of the length of the top strip
   float m_topHalfStripLength = 0;

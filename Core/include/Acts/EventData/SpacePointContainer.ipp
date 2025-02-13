@@ -47,6 +47,7 @@ void SpacePointContainer<container_t, holder_t>::initialize() {
     m_data.setPhi(i, std::atan2(m_data.y(i), m_data.x(i)));
     m_data.setVarianceR(i, external_container.varianceR_impl(i));
     m_data.setVarianceZ(i, external_container.varianceZ_impl(i));
+    m_data.setModId(i, external_container.modId_impl(i));
 
     m_proxies.emplace_back(*this, i);
   }
@@ -200,6 +201,12 @@ template <typename container_t, template <typename> class holder_t>
 float SpacePointContainer<container_t, holder_t>::varianceZ(
     const std::size_t n) const {
   return m_data.varianceZ(n);
+}
+
+template <typename container_t, template <typename> class holder_t>
+uint64_t SpacePointContainer<container_t, holder_t>::modId(
+    const std::size_t n) const {
+  return m_data.modId(n);
 }
 
 template <typename container_t, template <typename> class holder_t>

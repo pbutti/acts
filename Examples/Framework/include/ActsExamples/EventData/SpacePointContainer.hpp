@@ -60,6 +60,7 @@ class SpacePointContainer {
   float z_impl(std::size_t idx) const;
   float varianceR_impl(std::size_t idx) const;
   float varianceZ_impl(std::size_t idx) const;
+  uint64_t modId_impl(std::size_t idx) const;
 
   const ValueType& get_impl(std::size_t idx) const { return storage()[idx]; }
 
@@ -113,6 +114,12 @@ template <typename collection_t>
 inline float SpacePointContainer<collection_t>::varianceZ_impl(
     std::size_t idx) const {
   return storage()[idx]->varianceZ();
+}
+
+template <typename collection_t>
+inline uint64_t SpacePointContainer<collection_t>::modId_impl(
+    std::size_t idx) const {
+  return storage()[idx]->modId();
 }
 
 template <typename collection_t>

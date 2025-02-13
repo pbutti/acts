@@ -40,6 +40,7 @@ class SpacePointProxy {
   float radius() const;
   float varianceR() const;
   float varianceZ() const;
+  uint64_t modId() const;
 
   const Acts::Vector3& topStripVector() const;
   const Acts::Vector3& bottomStripVector() const;

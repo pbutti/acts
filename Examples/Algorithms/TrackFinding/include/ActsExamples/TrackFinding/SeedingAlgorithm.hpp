@@ -96,8 +96,6 @@ class SeedingAlgorithm final : public IAlgorithm {
   /// Const access to the config
   const Config& config() const { return m_cfg; }
 
-
-    
  private:
   using SpacePointProxy_t = typename Acts::SpacePointContainer<
       ActsExamples::SpacePointContainer<std::vector<const SimSpacePoint*>>,
@@ -117,13 +115,8 @@ class SeedingAlgorithm final : public IAlgorithm {
   WriteDataHandle<SimSeedContainer> m_outputSeeds{this, "OutputSeeds"};
 
   
-  static inline void loadModuleMap() {
+  static inline Acts::simple_doubletMap loadModuleMap() {
     
-
-    
-    
-    
-
     std::unique_ptr<TFile> mapfile = std::make_unique<TFile>("/mnt/hdd1/pibutti/data/GNN_ModuleMaps/ModuleMap_closest_all_dr_rel24_89809evts_double.doublets.tol1e-10.root");
   
     TTree* ttree = static_cast<TTree*>(mapfile->Get("TreeModuleDoublet"));
@@ -188,17 +181,21 @@ class SeedingAlgorithm final : public IAlgorithm {
     
     
     Long64_t nentries = ttree->GetEntriesFast();
-    //std::cout<<"Number of entries = "<<nentries<<std::endl;
 
-    std::unordered_map<std::pair<uint64_t,uint64_t>,bool,Acts::pairHash> doubletmap;
+    Acts::simple_doubletMap doubletmap;
+    Acts::commutativePairHash hasher;
     
     for (Long64_t jentry=0; jentry<nentries;jentry++) {
       ttree->GetEntry(jentry);
       
-      doubletmap[std::make_pair(Module1, Module2)] = true;
+      //std::cout<<Module1<<" "<<Module2<<" hash="<<hasher(std::make_pair(Module1,Module2))<<std::endl;
+      uint64_t hash = hasher(std::make_pair(Module1,Module2));
+      doubletmap[hash] = true;
       
     }
-    //std::cout<<"PF: Size of doublet map "<<doubletmap.size()<<std::endl;
+    
+    std::cout<<"PF: SeedingAlgorithm--Size of doublet map "<<doubletmap.size()<<std::endl;
+    return doubletmap;
     
   }
   

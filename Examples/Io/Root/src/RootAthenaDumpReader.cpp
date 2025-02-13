@@ -560,6 +560,9 @@ RootAthenaDumpReader::readSpacepoints(
     SimSpacePoint sp(globalPos, std::nullopt, spCovr, spCovz, std::nullopt,
                      sLinks);
 
+    sp.setModId(CLmoduleID[cl1Index]);
+    
+
     if (type == ePixel) {
       pixelSpacePoints.push_back(sp);
     } else {

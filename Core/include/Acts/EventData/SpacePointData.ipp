@@ -6,8 +6,6 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-#include <iostream>
-
 namespace Acts {
 
 inline float SpacePointData::x(const std::size_t idx) const {
@@ -38,6 +36,11 @@ inline float SpacePointData::phi(const std::size_t idx) const {
 inline float SpacePointData::varianceZ(const std::size_t idx) const {
   assert(idx < m_varianceZ.size());
   return m_varianceZ[idx];
+}
+
+inline uint64_t SpacePointData::modId(const std::size_t idx) const {
+  assert(idx < m_modId.size());
+  return m_modId[idx];
 }
 
 inline float SpacePointData::varianceR(const std::size_t idx) const {
@@ -81,6 +84,12 @@ inline void SpacePointData::setVarianceR(const std::size_t idx,
                                          const float value) {
   assert(idx < m_varianceR.size());
   m_varianceR[idx] = value;
+}
+
+inline void SpacePointData::setModId(const std::size_t idx,
+				     const uint64_t value) {
+  assert(idx < m_modId.size());
+  m_modId[idx] = value;
 }
 
 inline bool SpacePointData::hasDynamicVariable() const {
@@ -145,6 +154,7 @@ inline void SpacePointData::resize(const std::size_t n, bool resizeDynamic) {
   m_phi.resize(n, 0.f);
   m_varianceZ.resize(n, 0.f);
   m_varianceR.resize(n, 0.f);
+  m_modId.resize(n, 0);
 
   if (resizeDynamic) {
     m_topStripVector.resize(n, {0, 0, 0});
@@ -162,6 +172,7 @@ inline void SpacePointData::clear() {
   m_phi.clear();
   m_varianceZ.clear();
   m_varianceR.clear();
+  m_modId.clear();
   // dynamic variables
   m_topStripVector.clear();
   m_bottomStripVector.clear();

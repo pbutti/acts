@@ -311,13 +311,25 @@ SeedFinder<external_spacepoint_t, grid_t, platform_t>::getCompatibleDoublets(
         }
       }
 
-      bool useMap=false;
+      bool useMap=true;
+
       
-      if (useMap && !m_doubletmap.contains(m_hasher(std::make_pair(idOtherSP,idM)))) {
-	//std::cout<<"PF::ModuleMap Rejected point"<<std::endl;
-	//std::cout<<"PF::Other="<<idOtherSP<<" mid="<<idM<<" hash="<<hash<<std::endl;
-	continue;
+      auto hash = m_hasher(std::make_pair(idOtherSP,idM));
+      //std::cout<<"PF:: Doublet map size()="<<m_doubletmap.size()<<std::endl;
+
+      
+      //      std::cout<<"PF::Other="<<idOtherSP<<" mid="<<idM<<" hash="<<hash<<std::endl;
+      
+      
+      if (useMap) {
+	
+	if (!m_doubletmap.contains(hash)) {
+	  continue;
+	}
       }
+      
+      
+            
       
       if constexpr (isBottomCandidate) {
         deltaZ = (zM - otherSP->z());

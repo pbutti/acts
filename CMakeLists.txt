@@ -69,6 +69,7 @@ option(ACTS_USE_SYSTEM_ALGEBRAPLUGINS "Use a system-provided algebra-plugins ins
 option(ACTS_USE_SYSTEM_NLOHMANN_JSON "Use nlohmann::json provided by the system instead of the bundled version" ${ACTS_USE_SYSTEM_LIBS})
 option(ACTS_USE_SYSTEM_PYBIND11 "Use a system installation of pybind11" ${ACTS_USE_SYSTEM_LIBS} )
 option(ACTS_USE_SYSTEM_EIGEN3 "Use a system-provided eigen3" ON)
+option(ACTS_USE_SYSTEM_HIGHWAY "Use a system-provided highway" OFF)
 
 option(ACTS_BUILD_PLUGIN_ACTSVG "Build SVG display plugin" OFF)
 option(ACTS_BUILD_PLUGIN_CUDA "Build CUDA plugin" OFF)
@@ -78,7 +79,7 @@ option(ACTS_BUILD_PLUGIN_EDM4HEP "Build EDM4hep plugin" OFF)
 option(ACTS_BUILD_PLUGIN_FPEMON "Build FPE monitoring plugin" OFF)
 option(ACTS_BUILD_PLUGIN_GEOMODEL "Build GeoModel plugin" OFF)
 option(ACTS_BUILD_PLUGIN_TRACCC "Build Traccc plugin" OFF)
-option(ACTS_BUILD_PLUGIN_GEANT4 "Build Geant4 plugin" OFF)
+option(ACTS_BUILD_PLUGIN_GEANT4 "Build Geant4 plugin" ON)
 option(ACTS_BUILD_PLUGIN_EXATRKX "Build the Exa.TrkX plugin" OFF)
 option(ACTS_EXATRKX_ENABLE_ONNX "Build the Onnx backend for the exatrkx plugin" OFF)
 option(ACTS_EXATRKX_ENABLE_TORCH "Build the torchscript backend for the exatrkx plugin" ON)
@@ -95,14 +96,14 @@ option(ACTS_BUILD_FATRAS_GEANT4 "Build Geant4 Fatras package" OFF)
 # alignment related options
 option(ACTS_BUILD_ALIGNMENT "Build Alignment package" OFF)
 # examples related options
-option(ACTS_BUILD_EXAMPLES_DD4HEP "Build DD4hep-based code in the examples" OFF)
+option(ACTS_BUILD_EXAMPLES_DD4HEP "Build DD4hep-based code in the examples" ON)
 option(ACTS_BUILD_EXAMPLES_EDM4HEP "Build EDM4hep-based code in the examples" OFF)
 option(ACTS_BUILD_EXAMPLES_EXATRKX "Build the Exa.TrkX example code" OFF)
-option(ACTS_BUILD_EXAMPLES_GEANT4 "Build Geant4-based code in the examples" OFF)
+option(ACTS_BUILD_EXAMPLES_GEANT4 "Build Geant4-based code in the examples" ON)
 option(ACTS_BUILD_EXAMPLES_HEPMC3 "Build HepMC3-based code in the examples" OFF)
 option(ACTS_BUILD_EXAMPLES_HASHING "Build Hashing-based code in the examples" OFF)
-option(ACTS_BUILD_EXAMPLES_PYTHIA8 "Build Pythia8-based code in the examples" OFF)
-option(ACTS_BUILD_EXAMPLES_PYTHON_BINDINGS "Build python bindings for the examples" OFF)
+option(ACTS_BUILD_EXAMPLES_PYTHIA8 "Build Pythia8-based code in the examples" ON)
+option(ACTS_BUILD_EXAMPLES_PYTHON_BINDINGS "Build python bindings for the examples" ON)
 option(ACTS_BUILD_ANALYSIS_APPS "Build Analysis applications in the examples" OFF)
 # test related options
 option(ACTS_BUILD_BENCHMARKS "Build benchmarks" OFF)
@@ -119,11 +120,14 @@ option(ACTS_RUN_CLANG_TIDY "Run clang-tidy static analysis" OFF)
 option(ACTS_BUILD_DOCS "Build documentation" OFF)
 option(ACTS_SETUP_BOOST "Explicitly set up Boost for the project" ON)
 option(ACTS_SETUP_EIGEN3 "Explicitly set up Eigen3 for the project" ON)
-option(ACTS_BUILD_ODD "Build the OpenDataDetector" OFF)
+option(ACTS_BUILD_ODD "Build the OpenDataDetector" ON)
 # profiling related options
 option(ACTS_ENABLE_CPU_PROFILING "Enable CPU profiling using gperftools" OFF)
 option(ACTS_ENABLE_MEMORY_PROFILING "Enable memory profiling using gperftools" OFF)
 set(ACTS_GPERF_INSTALL_DIR "" CACHE STRING "Hint to help find gperf if profiling is enabled")
+
+# vectorization with highway
+option(ACTS_ENABLE_HIGHWAY "Enable vectorization code with google highway" ON)
 
 option(ACTS_ENABLE_LOG_FAILURE_THRESHOLD "Enable failing on log messages with level above certain threshold" OFF)
 set(ACTS_LOG_FAILURE_THRESHOLD "" CACHE STRING "Log level above which an exception should be automatically thrown. If ACTS_ENABLE_LOG_FAILURE_THRESHOLD is set and this is unset, this will enable a runtime check of the log level.")
@@ -275,6 +279,7 @@ set(_acts_covfie_version 0.12.1)
 set(_acts_vecmem_version 1.14.0)
 set(_acts_algebraplugins_version 0.26.2)
 set(_acts_annoy_version 1.17.3)
+set(_acts_google_highway_version 1.2.0)
 
 # recommended dependency version. if there is an opportunity to reach
 # this version we will try so.
@@ -497,7 +502,18 @@ if(ACTS_BUILD_PLUGIN_TRACCC)
     else()
         add_subdirectory(thirdparty/traccc)
     endif()
+    
+  endif()
+  
+# compile highway if requested
+if (ACTS_ENABLE_HIGHWAY)
+  if (ACTS_USE_SYSTEM_HIGHWAY)
+    find_package(highway ${_acts_google_highway_version} REQUIRED CONFIG)
+  else()
+    add_subdirectory(thirdparty/highway)
+  endif()
 endif()
+  
 if(ACTS_SETUP_ANNOY OR ACTS_BUILD_PLUGIN_HASHING)
     add_subdirectory(thirdparty/Annoy)
 endif()

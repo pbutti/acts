@@ -82,6 +82,30 @@ if(ACTS_ENABLE_MEMORY_PROFILING)
     endif()
 endif()
 
+if(ACTS_ENABLE_HIGHWAY)
+  message(STATUS "added highway")
+  
+  # Link against the Highway target
+  target_link_libraries(ActsCore PUBLIC 
+    hwy  
+    )
+  
+  # Add Highway include directories
+  # Often not needed if using target_link_libraries, as it should propagate includes
+  # But included here for completeness
+  #target_include_directories(ActsCore 
+  #  PUBLIC 
+  #  ${highway_SOURCE_DIR}/include  # Adjust path as needed
+  #  )
+  
+  # Add compile definition if needed
+  target_compile_definitions(ActsCore 
+    PUBLIC 
+    ACTS_ENABLE_HIGHWAY
+    )
+endif()
+  
+
 install(
     TARGETS ActsCore
     EXPORT ActsCoreTargets

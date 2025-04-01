@@ -11,6 +11,8 @@
 #include <numeric>
 #include <type_traits>
 
+
+
 namespace Acts {
 
 template <typename external_spacepoint_t, typename grid_t, typename platform_t>
@@ -135,12 +137,20 @@ void SeedFinder<external_spacepoint_t, grid_t, platform_t>::createSeedsForGroup(
     const float sinPhiM = -spM->y() * uIP;
     const float uIP2 = uIP * uIP;
 
+    // Check the compatible doublets for top using vectorized form
+    //getCompatibleDoublets<false>(
+    //options,grid,state.spacePointMutableData, state.topNeighbours,*spM,
+    //	state.linCircleTop, state.compatTopSP, m_config.deltaRMinTopSP,
+    //	m_config.deltaRMaxTopSP, uIP, uIP2, cosPhiM, sinPhiM);
+    
+    
+    
     // Iterate over middle-top dublets
     getCompatibleDoublets<Acts::SpacePointCandidateType::eTop>(
         options, grid, state.spacePointMutableData, state.topNeighbours, *spM,
         state.linCircleTop, state.compatTopSP, m_config.deltaRMinTopSP,
         m_config.deltaRMaxTopSP, uIP, uIP2, cosPhiM, sinPhiM);
-
+    
     // no top SP found -> try next spM
     if (state.compatTopSP.empty()) {
       ACTS_VERBOSE("No compatible Tops, moving to next middle candidate");
@@ -206,6 +216,71 @@ void SeedFinder<external_spacepoint_t, grid_t, platform_t>::createSeedsForGroup(
   }  // loop on mediums
 }
 
+  /*
+template <typename external_spacepoint_t, typename grid_t, typename platform_t>
+template <Acts::SpacePointCandidateType candidateType, typename out_range_t>
+inline void
+SeedFinder<external_spacepoint_t, grid_t, platform_t>::getCompatibleDoubletsMasks(
+    const Acts::SeedFinderOptions& options, const grid_t& grid,
+    Acts::SpacePointMutableData& mutableData,
+    boost::container::small_vector<Neighbour<grid_t>,
+                                   Acts::detail::ipow(3, grid_t::DIM)>&
+        otherSPsNeighbours,
+    const external_spacepoint_t& mediumSP, std::vector<LinCircle>& linCircleVec,
+    out_range_t& outVec, const float deltaRMinSP, const float deltaRMaxSP,
+    const float uIP, const float uIP2, const float cosPhiM,
+    const float sinPhiM) const {
+  
+
+  float impactMax = m_config.impactMax;
+  constexpr bool isBottomCandidate =
+    candidateType == Acts::SpacePointCandidateType::eBottom;
+
+  if constexpr (isBottomCandidate) {
+    impactMax = -impactMax;
+  }
+
+  outVec.clear();
+  linCircleVec.clear();
+
+  // get number of neighbour SPs
+  std::size_t nsp = 0;
+  for (const auto& otherSPCol : otherSPsNeighbours) {
+    nsp += grid.at(otherSPCol.index).size();
+  }
+  
+  linCircleVec.reserve(nsp);
+  outVec.reserve(nsp);
+
+  const float rM = mediumSP.radius();
+  const float xM = mediumSP.x();
+  const float yM = mediumSP.y();
+  const float zM = mediumSP.z();
+  const float varianceRM = mediumSP.varianceR();
+  const float varianceZM = mediumSP.varianceZ();
+
+  float vIPAbs = 0;
+  if (m_config.interactionPointCut) {
+    // equivalent to m_config.impactMax / (rM * rM);
+    vIPAbs = impactMax * uIP2;
+  }
+
+  float deltaR = 0.;
+  float deltaZ = 0.;
+  
+  for (auto& otherSPCol : otherSPsNeighbours) {
+    const std::vector<const external_spacepoint_t*>& otherSPs =
+        grid.at(otherSPCol.index);
+    if (otherSPs.empty()) {
+      continue;
+    }
+
+    }//loop on the neigbour SPs
+      
+}
+  */
+  
+
 template <typename external_spacepoint_t, typename grid_t, typename platform_t>
 template <Acts::SpacePointCandidateType candidateType, typename out_range_t>
 inline void
@@ -263,6 +338,11 @@ SeedFinder<external_spacepoint_t, grid_t, platform_t>::getCompatibleDoublets(
       continue;
     }
 
+    // This returns a mask of the SPs that pass the condition.
+    optimizeSpacePointSearch<external_spacepoint_t,isBottomCandidate>(otherSPs,
+								      mediumSP,
+								      m_config);    
+    
     // we make a copy of the iterator here since we need it to remain
     // the same in the Neighbour object
     auto min_itr = otherSPCol.itr;
@@ -290,7 +370,7 @@ SeedFinder<external_spacepoint_t, grid_t, platform_t>::getCompatibleDoublets(
 
     for (; min_itr != otherSPs.end(); ++min_itr) {
       const external_spacepoint_t* otherSP = *min_itr;
-
+      
       if constexpr (isBottomCandidate) {
         deltaR = (rM - otherSP->radius());
 
@@ -306,7 +386,7 @@ SeedFinder<external_spacepoint_t, grid_t, platform_t>::getCompatibleDoublets(
           break;
         }
       }
-
+      
       if constexpr (isBottomCandidate) {
         deltaZ = (zM - otherSP->z());
       } else {
@@ -318,12 +398,18 @@ SeedFinder<external_spacepoint_t, grid_t, platform_t>::getCompatibleDoublets(
       // point duplet but instead we calculate (zOrigin * deltaR) and multiply
       // collisionRegion by deltaR to avoid divisions
       const float zOriginTimesDeltaR = (zM * deltaR - rM * deltaZ);
+      std::cout<<"PF:: deltaR="<<deltaR<<std::endl;
+      std::cout<<"PF:: zM="<<zM<<std::endl;
+      std::cout<<"zM * deltaR="<<zM * deltaR<<std::endl;
+      std::cout<<"-rM * deltaZ="<<- rM * deltaZ<<std::endl;
+      std::cout<<"PF:: zOriginTimesDeltaR="<<zOriginTimesDeltaR<<std::endl;
+      std::cout<<"PF::deltaZ = "<<deltaZ<<std::endl;
       // check if duplet origin on z axis within collision region
       if (zOriginTimesDeltaR < m_config.collisionRegionMin * deltaR ||
           zOriginTimesDeltaR > m_config.collisionRegionMax * deltaR) {
         continue;
       }
-
+      
       // if interactionPointCut is false we apply z cuts before coordinate
       // transformation to avoid unnecessary calculations. If
       // interactionPointCut is true we apply the curvature cut first because it
@@ -385,6 +471,10 @@ SeedFinder<external_spacepoint_t, grid_t, platform_t>::getCompatibleDoublets(
       const float uT = xNewFrame * iDeltaR2;
       const float vT = yNewFrame * iDeltaR2;
 
+
+      std::cout<<"PF::std::abs(rM * yNewFrame)="<<std::abs(rM * yNewFrame)<<std::endl;
+      std::cout<<"PF::impactMax * xNewFrame="<<impactMax * xNewFrame<<std::endl;
+
       // We check the interaction point by evaluating the minimal distance
       // between the origin and the straight line connecting the two points in
       // the doublets. Using a geometric similarity, the Im is given by
@@ -402,23 +492,27 @@ SeedFinder<external_spacepoint_t, grid_t, platform_t>::getCompatibleDoublets(
             deltaZ < -m_config.cotThetaMax * deltaR) {
           continue;
         }
-
+	
         const float iDeltaR = std::sqrt(iDeltaR2);
         const float cotTheta = deltaZ * iDeltaR;
 
+	// Disable for the moment
         // discard bottom-middle dublets in a certain (r, eta) region according
         // to detector specific cuts
-        if constexpr (isBottomCandidate) {
-          if (!m_config.experimentCuts(otherSP->radius(), cotTheta)) {
-            continue;
-          }
-        }
+        //if constexpr (isBottomCandidate) {
+        //  if (!m_config.experimentCuts(otherSP->radius(), cotTheta)) {
+        //    continue;
+        //  }
+	//}
 
         const float Er =
             ((varianceZM + otherSP->varianceZ()) +
              (cotTheta * cotTheta) * (varianceRM + otherSP->varianceR())) *
             iDeltaR2;
 
+	std::cout<<"PF::Filling in the first check with"<<
+	  cotTheta<<" "<< iDeltaR<<" "<< Er<<" "<< uT<<" "<< vT<<" "<< xNewFrame<<" "<<yNewFrame<<std::endl;
+	
         // fill output vectors
         linCircleVec.emplace_back(cotTheta, iDeltaR, Er, uT, vT, xNewFrame,
                                   yNewFrame);
@@ -455,13 +549,15 @@ SeedFinder<external_spacepoint_t, grid_t, platform_t>::getCompatibleDoublets(
       const float iDeltaR = std::sqrt(iDeltaR2);
       const float cotTheta = deltaZ * iDeltaR;
 
+
+      //Disable for the moment
       // discard bottom-middle dublets in a certain (r, eta) region according
       // to detector specific cuts
-      if constexpr (isBottomCandidate) {
-        if (!m_config.experimentCuts(otherSP->radius(), cotTheta)) {
-          continue;
-        }
-      }
+      //if constexpr (isBottomCandidate) {
+      //  if (!m_config.experimentCuts(otherSP->radius(), cotTheta)) {
+      //    continue;
+      //  }
+      //}
 
       const float Er =
           ((varianceZM + otherSP->varianceZ()) +

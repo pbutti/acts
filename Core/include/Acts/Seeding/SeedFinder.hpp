@@ -31,6 +31,8 @@
 #include <utility>
 #include <vector>
 
+#include "/mnt/hdd1/pibutti/sw/acts/Core/include/Acts/Seeding/FilterStrategy.hpp"
+
 namespace Acts {
 
 template <typename Coll>

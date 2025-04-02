@@ -8,22 +8,24 @@
 #include <hwy/highway.h>
 //#include "hwy/print.h"
 
-#define _DEBUG_
+//#define _DEBUG_
+//#define _DEBUG2_
 
 namespace hn = hwy::HWY_NAMESPACE;
 
 namespace Acts {
 
 
+  // This returns a mask of the SPs that pass the condition.
+  template<typename external_spacepoint_t, bool isBottomCandidate>
+  bool optimizeSpacePointSearch(
+	  const std::vector<const external_spacepoint_t*>& otherSPs,
+	  float rM, float xM, float yM, float zM, float uIP2, float cosPhiM, float sinPhiM,
+	  float varianceRM, float varianceZM, float deltaRMaxSP, float deltaRMinSP,
+	  float impactMax, float cotThetaMax, float deltaZMax,
+	  float collisionRegionMin, float collisionRegionMax) {
 
-  template<typename external_spacepoint_t, bool isBottomCandidate> 
-  std::vector<uint8_t> optimizeSpacePointSearch(
-			const std::vector<const external_spacepoint_t*>& otherSPs,
-			const external_spacepoint_t& mediumSP,
-			const SeedFinderConfig<external_spacepoint_t>& config
-						) {
-
-    
+    /*
     float rM = mediumSP.radius();
     float xM = mediumSP.x();
     float yM = mediumSP.y();
@@ -54,6 +56,7 @@ namespace Acts {
     float deltaZMax   = config.deltaZMax;
     float collisionRegionMin = config.collisionRegionMin;
     float collisionRegionMax = config.collisionRegionMax;
+    */
 
   #ifdef _DEBUG_
   // Debug: Print input parameters
@@ -67,22 +70,25 @@ namespace Acts {
     
     // Highway SIMD vector configuration for float
     const hn::ScalableTag<float> d;
-        
     const auto lanes = hn::Lanes(d);
+
+    constexpr unsigned int align = 16;
     
     // Output mask. Use uint8_t for better memory layout.
     // Alternatively consider <bool>
-    std::vector<uint8_t> valid_mask;
-    valid_mask.reserve(otherSPs.size());
+    //std::vector<uint8_t> valid_mask;
+    //valid_mask.reserve(otherSPs.size());
     size_t paddingSize = 0;
     
     // Prepare vectorized processing
     for (size_t i = 0; i < otherSPs.size(); i += lanes) {    
       // Prepare buffers for vectorized processing
-      alignas(64) float radiusBuffer[lanes];
-      alignas(64) float zBuffer[lanes];
-      alignas(64) float xBuffer[lanes];
-      alignas(64) float yBuffer[lanes];
+      alignas(align) float radiusBuffer[lanes];
+      alignas(align) float zBuffer[lanes];
+      alignas(align) float xBuffer[lanes];
+      alignas(align) float yBuffer[lanes];
+      alignas(align) float vZBuffer[lanes];
+      alignas(align) float vRBuffer[lanes];
       
       // Load radii into buffer
       for (size_t j = 0; j < lanes; ++j) {
@@ -95,6 +101,8 @@ namespace Acts {
 	  zBuffer[j] = otherSPs[i + j]->z();
 	  xBuffer[j] = otherSPs[i + j]->x();
 	  yBuffer[j] = otherSPs[i + j]->y();
+	  vZBuffer[j] = otherSPs[i + j]->varianceZ();
+	  vRBuffer[j] = otherSPs[i + j]->varianceR();
 	  
 	} else {
 	  // Pad with sentinel values to avoid processing invalid elements
@@ -352,17 +360,18 @@ namespace Acts {
       auto vTs = hn::Mul(yNewFrames,iDeltaR2s);
 
       auto impactMaxs = hn::Set(d, impactMax);
-      auto impactMaxTimesxNewFrames = hn::IfThenElseZero(combinedMask,hn::Mul(impactMaxs,xNewFrames));
-      auto rMTimesyNewFrames = hn::Abs(hn::IfThenElseZero(combinedMask, hn::Mul(rMs,yNewFrames)));
+      auto impactMaxTimesxNewFrames = hn::Mul(impactMaxs,xNewFrames);
+      auto rMTimesyNewFrames = hn::Abs(hn::Mul(rMs,yNewFrames));
 
       // I make sure I combine it with the combined Mask to avoid miscomputations in masked lines
       auto frameMask = hn::And(combinedMask,hn::Lt(rMTimesyNewFrames,impactMaxTimesxNewFrames));
-      
+
+      auto negFrameMask = hn::Not(frameMask);
       
       auto cotThetaMaxs = hn::Set(d,cotThetaMax);
-      auto deltaRCotThetaMaxs = hn::IfThenElseZero(frameMask,hn::Mul(deltaRs,cotThetaMaxs));
+      auto deltaRCotThetaMaxs = hn::Mul(deltaRs,cotThetaMaxs);
 
-
+      
       // -cotThetaMax*deltaR< deltaZ < cotThetaMax*deltaR
       auto cotThetaMask = hn::And(hn::Gt(deltaZs,hn::Neg(deltaRCotThetaMaxs)),hn::Lt(deltaZs,deltaRCotThetaMaxs));
       
@@ -380,31 +389,63 @@ namespace Acts {
 
       // Can be optimized
       auto iDeltaRs  = hn::IfThenElseZero(mask, hn::Sqrt(iDeltaR2s));
-      auto cotThetas = hn::IfThenElseZero(mask, hn::Mul(deltaZs,iDeltaRs)); 
+      auto cotThetas = hn::Mul(deltaZs,iDeltaRs); 
+      
+      // Prepare the errors
+      
+      auto vZms = hn::Set(d,varianceZM);
+      auto vRms = hn::Set(d,varianceRM);
+      
+      auto vZs = hn::Load(d,vZBuffer);
+      auto vRs = hn::Load(d,vRBuffer);
 
+      auto Ers = hn::IfThenElseZero(mask,hn::Add(hn::Add(vZms,vZs),hn::Mul(hn::Mul(hn::Mul(cotThetas,cotThetas), hn::Add(vRms,vRs)),iDeltaR2s)));
+      
       // For the moment do not implement the bottom candidate cut
       
-#ifdef _DEBUG_
-      
-      std::cout<<"iDeltaRs"<<std::endl;
-      for (size_t idbg = 0; idbg < lanes; idbg++) {
-	std::cout << "Lane " << idbg << ": " << hn::ExtractLane(iDeltaRs,idbg) << std::endl;
-      }
+#ifdef _DEBUG2_
 
       std::cout<<"cotThetas"<<std::endl;
       for (size_t idbg = 0; idbg < lanes; idbg++) {
 	std::cout << "Lane " << idbg << ": " << hn::ExtractLane(cotThetas,idbg) << std::endl;
       }
-      
-      
-#endif
+            
+      std::cout<<"iDeltaRs"<<std::endl;
+      for (size_t idbg = 0; idbg < lanes; idbg++) {
+	std::cout << "Lane " << idbg << ": " << hn::ExtractLane(iDeltaRs,idbg) << std::endl;
+      }
 
-      
-      
+      std::cout<<"Ers"<<std::endl;
+      for (size_t idbg = 0; idbg < lanes; idbg++) {
+	std::cout << "Lane " << idbg << ": " << hn::ExtractLane(Ers,idbg) << std::endl;
+      }
+
+      std::cout<<"uTs"<<std::endl;
+      for (size_t idbg = 0; idbg < lanes; idbg++) {
+	std::cout << "Lane " << idbg << ": " << hn::ExtractLane(uTs,idbg) << std::endl;
+      }
+
+      std::cout<<"vTs"<<std::endl;
+      for (size_t idbg = 0; idbg < lanes; idbg++) {
+	std::cout << "Lane " << idbg << ": " << hn::ExtractLane(vTs,idbg) << std::endl;
+      }
+
+      std::cout<<"xNewFrames"<<std::endl;
+      for (size_t idbg = 0; idbg < lanes; idbg++) {
+	std::cout << "Lane " << idbg << ": " << hn::ExtractLane(xNewFrames,idbg) << std::endl;
+      }
+
+      std::cout<<"yNewFrames"<<std::endl;
+      for (size_t idbg = 0; idbg < lanes; idbg++) {
+	std::cout << "Lane " << idbg << ": " << hn::ExtractLane(yNewFrames,idbg) << std::endl;
+      }
+            
+#endif
+            
   } //loop on other SPs
 
 
-  return valid_mask;
+    return true;
   } // optimizeSpacePointSearch
 }
 

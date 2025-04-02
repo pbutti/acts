@@ -170,6 +170,21 @@ class SeedFinder {
       const float deltaRMinSP, const float deltaRMaxSP, const float uIP,
       const float uIP2, const float cosPhiM, const float sinPhiM) const;
 
+
+  template <Acts::SpacePointCandidateType candidateType, typename out_range_t>
+  inline void getCompatibleDoubletsMasks(
+    const Acts::SeedFinderOptions& options, const grid_t& grid,
+    Acts::SpacePointMutableData& mutableData,
+    boost::container::small_vector<Neighbour<grid_t>,
+    Acts::detail::ipow(3, grid_t::DIM)>&
+    otherSPsNeighbours,
+    const external_spacepoint_t& mediumSP, std::vector<LinCircle>& linCircleVec,
+    out_range_t& outVec, const float deltaRMinSP, const float deltaRMaxSP,
+    const float uIP, const float uIP2, const float cosPhiM,
+    const float sinPhiM) const;
+
+  
+
   /// Iterates over the seed candidates tests the compatibility between three
   /// SPs and calls for the seed confirmation
   /// @param SpM space point candidate to be used as middle SP in a seed

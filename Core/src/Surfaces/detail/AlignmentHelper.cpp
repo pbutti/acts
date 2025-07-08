@@ -91,4 +91,43 @@ detail::RotationToAxes detail::rotationToLocalAxesDerivative(
           std::move(rotToLocalZAxis)};
 }
 
+  // compositeTransform is the global to composite      G2Composite
+  // componentTransform is the composite to component   Composite2Component
+  ActsMatrix<6,6> FrameJacobian(const Transform3& compositeTransform,
+				const Transform3& componentTransform) {
+    
+    
+    ActsMatrix<6,6> jacobian = ActsMatrix<6,6>::Zero();
+    
+    
+    // Set the top-left 3x3 block of mat to R(g2l)
+    jacobian.block<3, 3>(0, 0) = componentTransform.linear();
+    jacobian.block<3, 3>(3, 3) = componentTransform.linear();
+
+    return jacobian;
+    
+  }
+  
+  ActsMatrix<3,3> dtdA(const ActsVector3& T0,
+		       const RotationMatrix3& R) {
+    
+    Acts::Vector3 xs{1,0,0};
+    Acts::Vector3 ys{1,0,0};
+    Acts::Vector3 zs{1,0,0};
+    
+    Acts::Vector3 xshat = R * xs;
+    Acts::Vector3 yshat = R * ys;
+    Acts::Vector3 zshat = R * zs;
+    
+    ActsMatrix<3,3> jacPosRot = ActsMatrix<3,3>::Zero();
+    
+    Acts::Vector3 Row0 = T0.cross(xs);
+    Acts::Vector3 Row1 = T0.cross(ys);
+    Acts::Vector3 Row2 = T0.cross(zs);
+    
+    jacPosRot.row(0) = Row0.transpose();
+    jacPosRot.row(1) = Row1.transpose();
+    jacPosRot.row(2) = Row2.transpose();
+  }
+  
 }  // namespace Acts

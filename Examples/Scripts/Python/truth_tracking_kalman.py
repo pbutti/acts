@@ -39,7 +39,7 @@ def runTruthTrackingKalman(
     )
 
     s = s or acts.examples.Sequencer(
-        events=100, numThreads=-1, logLevel=acts.logging.INFO
+        events=1000, numThreads=1, logLevel=acts.logging.INFO
     )
 
     for d in decorators:
@@ -53,9 +53,11 @@ def runTruthTrackingKalman(
     if inputParticlePath is None:
         addParticleGun(
             s,
-            ParticleConfig(num=1, pdg=acts.PdgParticle.eMuon, randomizeCharge=True),
+            #ParticleConfig(num=1, pdg=acts.PdgParticle.eProton, randomizeCharge=True),
+            #ParticleConfig(num=1, pdg=acts.PdgParticle.eMuon, randomizeCharge=True),
+            ParticleConfig(num=1, pdg=acts.PdgParticle.ePionPlus, randomizeCharge=True),
             EtaConfig(-3.0, 3.0, uniform=True),
-            MomentumConfig(1.0 * u.GeV, 100.0 * u.GeV, transverse=True),
+            MomentumConfig(0.5 * u.GeV, 3.0 * u.GeV, transverse=True),
             PhiConfig(0.0, 360.0 * u.degree),
             vtxGen=acts.examples.GaussianVertexGenerator(
                 mean=acts.Vector4(0, 0, 0, 0),
@@ -106,7 +108,7 @@ def runTruthTrackingKalman(
     addDigiParticleSelection(
         s,
         ParticleSelectorConfig(
-            pt=(0.9 * u.GeV, None),
+            pt=(0.5 * u.GeV, None),
             measurements=(7, None),
             removeNeutral=True,
             removeSecondaries=True,
@@ -129,6 +131,7 @@ def runTruthTrackingKalman(
         field,
         reverseFilteringMomThreshold,
         reverseFilteringCovarianceScaling,
+        logLevel=acts.logging.INFO,
     )
 
     s.addAlgorithm(

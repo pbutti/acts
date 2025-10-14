@@ -21,12 +21,23 @@
 #include <memory>
 #include <string>
 
+#include "TFile.h"
+#include "TTree.h"
+
+
 namespace Acts {
 class TrackingGeometry;
 }
 
 namespace ActsExamples {
 
+  std::vector<double> m_trackp;
+  std::vector<double> m_tracketa;
+  std::vector<int>    m_n_time_meas;
+  std::vector<std::vector<double>> m_chi2min;
+  std::vector<std::vector<double>> m_deltaChi2;
+  std::vector<int> m_pididx;
+  
 class TrackFittingAlgorithm final : public IAlgorithm {
  public:
   struct Config {
@@ -60,10 +71,18 @@ class TrackFittingAlgorithm final : public IAlgorithm {
   /// @return a process code to steer the algporithm flow
   ActsExamples::ProcessCode execute(const AlgorithmContext& ctx) const final;
 
+  
+  ProcessCode finalize() override;
+
   /// Get readonly access to the config parameters
   const Config& config() const { return m_cfg; }
 
- private:
+private:
+
+
+  TTree* m_tree;
+  TFile* m_outfile;
+  
   Config m_cfg;
 
   ReadDataHandle<MeasurementContainer> m_inputMeasurements{this,
@@ -76,6 +95,8 @@ class TrackFittingAlgorithm final : public IAlgorithm {
   ReadDataHandle<ClusterContainer> m_inputClusters{this, "InputClusters"};
 
   WriteDataHandle<ConstTrackContainer> m_outputTracks{this, "OutputTracks"};
+
+    
 };
 
 }  // namespace ActsExamples

@@ -152,16 +152,13 @@ ProcessCode TrackFittingAlgorithm::execute(const AlgorithmContext& ctx) const {
           auto i = subspace.indexOf(Acts::eBoundTime);
 
           if (trackState.hasSmoothed()) {
-
-
+            
             auto smoothed_state = trackState.smoothed();
             auto smoothed_cov = trackState.smoothedCovariance();
             
-
-            auto smoothed_time     = trackState.smoothed()[Acts::eBoundTime];
-            auto smoothed_time_cov = trackState.smoothedCovariance()(Acts::eBoundTime,Acts::eBoundTime);
+            //The profiled Chi2
             
-            //The Chi2 
+            
             
         }
       }

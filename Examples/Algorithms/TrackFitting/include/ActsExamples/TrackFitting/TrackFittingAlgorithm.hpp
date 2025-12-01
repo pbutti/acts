@@ -13,6 +13,7 @@
 #include "ActsExamples/EventData/Measurement.hpp"
 #include "ActsExamples/EventData/ProtoTrack.hpp"
 #include "ActsExamples/EventData/Track.hpp"
+#include "ActsExamples/EventData/SimParticle.hpp"
 #include "ActsExamples/Framework/DataHandle.hpp"
 #include "ActsExamples/Framework/IAlgorithm.hpp"
 #include "ActsExamples/Framework/ProcessCode.hpp"
@@ -32,11 +33,22 @@ class TrackingGeometry;
 namespace ActsExamples {
 
   std::vector<double> m_trackp;
+  std::vector<double> m_trackqopcov;
+  std::vector<double> m_truthp;
   std::vector<double> m_tracketa;
   std::vector<int>    m_n_time_meas;
   std::vector<std::vector<double>> m_chi2min;
+  std::vector<std::vector<double>> m_chi2min_prof;
+  std::vector<std::vector<double>> m_chi2min_simple;
   std::vector<std::vector<double>> m_deltaChi2;
+  std::vector<std::vector<double>> m_deltaChi2_prof;
+  std::vector<std::vector<double>> m_deltaChi2_simple;
   std::vector<int> m_pididx;
+  std::vector<int> m_pididx_prof;
+  std::vector<int> m_pididx_simple;
+
+  std::vector<std::vector<double>> m_t0hat;
+  std::vector<std::vector<double>> m_t0hat_simple;
   
 class TrackFittingAlgorithm final : public IAlgorithm {
  public:
@@ -91,6 +103,8 @@ private:
                                                          "InputProtoTracks"};
   ReadDataHandle<TrackParametersContainer> m_inputInitialTrackParameters{
       this, "InputInitialTrackParameters"};
+
+  ReadDataHandle<SimParticleContainer> m_inputParticles{this, "InputParticles"};
 
   ReadDataHandle<ClusterContainer> m_inputClusters{this, "InputClusters"};
 

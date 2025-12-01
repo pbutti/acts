@@ -39,7 +39,7 @@ def runTruthTrackingKalman(
     )
 
     s = s or acts.examples.Sequencer(
-        events=1000, numThreads=1, logLevel=acts.logging.INFO
+        events=100000, numThreads=1, logLevel=acts.logging.INFO
     )
 
     for d in decorators:
@@ -55,9 +55,11 @@ def runTruthTrackingKalman(
             s,
             #ParticleConfig(num=1, pdg=acts.PdgParticle.eProton, randomizeCharge=True),
             #ParticleConfig(num=1, pdg=acts.PdgParticle.eMuon, randomizeCharge=True),
-            ParticleConfig(num=1, pdg=acts.PdgParticle.ePionPlus, randomizeCharge=True),
-            EtaConfig(-3.0, 3.0, uniform=True),
-            MomentumConfig(0.5 * u.GeV, 3.0 * u.GeV, transverse=True),
+            #ParticleConfig(num=1, pdg=acts.PdgParticle.ePionPlus, randomizeCharge=True),
+            ParticleConfig(num=1, pdg=acts.PdgParticle.eKaonPlus, randomizeCharge=True),
+            #EtaConfig(-3.0, 3.0, uniform=True),
+            EtaConfig(-1.5, 1.5, uniform=True),
+            MomentumConfig(0.1 * u.GeV, 2.5 * u.GeV, transverse=False),
             PhiConfig(0.0, 360.0 * u.degree),
             vtxGen=acts.examples.GaussianVertexGenerator(
                 mean=acts.Vector4(0, 0, 0, 0),
@@ -65,6 +67,7 @@ def runTruthTrackingKalman(
             ),
             multiplicity=1,
             rnd=rnd,
+            printParticles=False
         )
     else:
         logger.info("Reading particles from %s", inputParticlePath.resolve())
@@ -79,12 +82,14 @@ def runTruthTrackingKalman(
         s.addWhiteboardAlias("particles", "particles_generated")
 
     if inputHitsPath is None:
+
         addFatras(
             s,
             trackingGeometry,
             field,
             rnd=rnd,
             enableInteractions=True,
+            pMin = 0.1
         )
     else:
         logger.info("Reading hits from %s", inputHitsPath.resolve())
@@ -96,7 +101,7 @@ def runTruthTrackingKalman(
                 outputSimHits="simhits",
             )
         )
-
+    
     addDigitization(
         s,
         trackingGeometry,
@@ -108,7 +113,7 @@ def runTruthTrackingKalman(
     addDigiParticleSelection(
         s,
         ParticleSelectorConfig(
-            pt=(0.5 * u.GeV, None),
+            pt=(0.3 * u.GeV, None),
             measurements=(7, None),
             removeNeutral=True,
             removeSecondaries=True,
@@ -122,7 +127,7 @@ def runTruthTrackingKalman(
         rnd=rnd,
         inputParticles="particles_generated",
         seedingAlgorithm=SeedingAlgorithm.TruthSmeared,
-        particleHypothesis=acts.ParticleHypothesis.muon,
+        particleHypothesis=acts.ParticleHypothesis.pion,
     )
 
     addKalmanTracks(
@@ -177,6 +182,14 @@ def runTruthTrackingKalman(
             filePath=str(outputDir / "performance_kf.root"),
         )
     )
+
+#    s.addWriter(
+#        acts.examples.RootParticleWriter(
+#            level=acts.logging.INFO,
+#            inputParticles="particles_selected",
+#            filePath=str(outputDir / "particles.root"),
+#        )
+#    )
 
     return s
 

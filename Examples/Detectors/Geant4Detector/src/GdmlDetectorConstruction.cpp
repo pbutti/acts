@@ -25,13 +25,17 @@ GdmlDetectorConstruction::GdmlDetectorConstruction(
 
 G4VPhysicalVolume* GdmlDetectorConstruction::Construct() {
   if (m_world == nullptr) {
+    std::cout << "PF:::GdmlDetectorConstruction::Construct()" << std::endl;
     G4GDMLParser parser;
     // TODO how to handle errors
+    std::cout << "PF::m_path:" << m_path << std::endl;
     parser.Read(m_path);
     m_world = parser.GetWorldVolume();
+    std::cout << "PF::m_world" << m_world << std::endl;
 
     // Create regions
     for (const auto& regionCreator : m_options.regionCreators) {
+      std::cout << "PF::Region Creator->buildRegion()" << std::endl;
       regionCreator->buildRegion();
     }
   }

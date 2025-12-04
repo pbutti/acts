@@ -79,6 +79,8 @@ void Geant4SimulationBase::commonInitialization() {
     if (runManager().GetUserDetectorConstruction() != nullptr) {
       delete runManager().GetUserDetectorConstruction();
     }
+
+    std::cout << "PF:: detector construction..." << std::endl;
     // G4RunManager will take care of deletion
     m_detectorConstruction =
         config()
@@ -172,6 +174,8 @@ Geant4Simulation::Geant4Simulation(const Config& cfg,
     throw std::runtime_error("inconsistent physics list");
   }
 
+  std::cout << "PF::START of Geant4Simulation" << std::endl;
+
   commonInitialization();
 
   // Set the primarty generator
@@ -242,6 +246,7 @@ Geant4Simulation::Geant4Simulation(const Config& cfg,
     runManager().SetUserAction(steppingAction);
   }
 
+  std::cout << "PF:: g4World...." << std::endl;
   // Get the g4World cache
   G4VPhysicalVolume* g4World = m_detectorConstruction->Construct();
 
@@ -268,7 +273,9 @@ Geant4Simulation::Geant4Simulation(const Config& cfg,
   }
 
   // ACTS sensitive surfaces are provided, so hit creation is turned on
+  std::cout << "PF::SENSITIVE SURFACE MAPPER? " << std::endl;
   if (cfg.sensitiveSurfaceMapper != nullptr) {
+    std::cout << "PF::MAPPER...." << std::endl;
     Geant4::SensitiveSurfaceMapper::State sState;
     ACTS_INFO(
         "Remapping selected volumes from Geant4 to Acts::Surface::GeometryID");
@@ -335,6 +342,7 @@ ProcessCode Geant4Simulation::execute(const AlgorithmContext& ctx) const {
 Geant4MaterialRecording::Geant4MaterialRecording(const Config& cfg,
                                                  Acts::Logging::Level level)
     : Geant4SimulationBase(cfg, "Geant4Simulation", level), m_cfg(cfg) {
+  std::cout << "PF::::Material Recording!" << std::endl;
   auto physicsListName = "MaterialPhysicsList";
   m_geant4Instance =
       m_cfg.geant4Handle

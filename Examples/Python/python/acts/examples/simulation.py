@@ -674,6 +674,7 @@ def addGeant4(
         smmConfig, customLogLevel(), trackingGeometry
     )
 
+    print("PF:: Adding Geant4")
     alg = Geant4Simulation(
         level=customLogLevel(),
         geant4Handle=__geant4Handle,

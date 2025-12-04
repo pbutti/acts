@@ -50,6 +50,38 @@ class TGeoDetectorElement : public Acts::DetectorElementBase {
   /// Constructor
   ///
   /// @note this constructor used auto-translation
+  /// @note Use this constructor for Gen3 Geometry building
+  ///
+  /// @param identifier is the detector identifier
+  /// @param tGeoNode is the TGeoNode which should be represented
+  /// @param axes is the axis orientation with respect to the tracking frame
+  ///        it is a string of the three characters x, y and z (standing for the
+  ///        three axes)
+  ///        there is a distinction between capital and lower case characters :
+  ///        - capital      -> positive orientation of the axis
+  ///        - lower case   -> negative orientation of the axis
+  ///        example options are "XYZ" -> identical frame definition (default
+  ///        value)
+  ///                            "YZX" -> node y axis is tracking x axis, etc.
+  ///                            "XzY" -> negative node z axis is tracking y
+  ///                            axis, etc.
+  /// @note This parameter only needs to be set for plane modules
+  /// @param scalor is the scale factor for unit conversion if needed
+  /// @note In the translation from a 3D geometry (TGeo) which only knows tubes
+  ///       to a 2D geometry (Tracking geometry) a distinction if the module
+  ///       should be described as a cylinder or a disc surface needs to be
+  ///       done. Since this information can not be taken just from the geometry
+  ///       description (both can be described as TGeoTubeSeg), one needs to
+  ///       set the flag 'isDisc' in case a volume with shape \c TGeoTubeSeg
+  ///       should be translated to a disc surface. Per default it will be
+  ///       translated into a cylindrical surface.
+
+  TGeoDetectorElement(const Identifier& identifier, const TGeoNode& tGeoNode,
+                      const std::string& axes = "XYZ", double scalor = 10.);
+
+  /// Constructor
+  ///
+  /// @note this constructor used auto-translation
   ///
   /// @param identifier is the detector identifier
   /// @param tGeoNode is the TGeoNode which should be represented

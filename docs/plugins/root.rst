@@ -70,3 +70,9 @@ has taken place by adding a splitter implementation to the ``ActsPlugins::TGeoLa
   :width: 800
 
   Conversion of a ``TGeoTube`` shape into a ``Acts::DiscSurface`` with ``Acts::DiscBounds``.The axes definitions has to be ``(x/X)(y/Y)(*/*)``.
+
+
+Generation3 geometry building
+--------
+
+Use of the BluePrintBuilder in the to construct the BluePrint from the TGeo

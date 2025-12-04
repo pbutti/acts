@@ -29,6 +29,67 @@ using Line2D = Eigen::Hyperplane<double, 2>;
 
 namespace ActsPlugins {
 
+// TODO:: REMOVE DUPLICATED CODE
+TGeoDetectorElement::TGeoDetectorElement(const Identifier& identifier,
+                                         const TGeoNode& tGeoNode,
+                                         const std::string& axes, double scalor)
+    : DetectorElementBase(), m_detElement(&tGeoNode), m_identifier(identifier) {
+  const TGeoMatrix* tGeoMatrix = nullptr;
+
+  if (auto nodeMatrix = dynamic_cast<const TGeoNodeMatrix*>(&tGeoNode)) {
+    tGeoMatrix = nodeMatrix->GetMatrix();
+  } else {
+    // No matrix available — this might be a TGeoNodeOffset, TGeoNode, etc.
+    // You can decide what to do here (throw, warn, default transform, ...)
+    throw std::runtime_error(
+        "TGeoDetectorElement()::Extracted node doesn't have an associated "
+        "matrix. Use a different TGeoDetectorElement constructor");
+  }
+
+  const Double_t* translation = tGeoMatrix.GetTranslation();
+  const Double_t* rotation = tGeoMatrix.GetRotationMatrix();
+
+  auto sensor = m_detElement->GetVolume();
+  auto tgShape = sensor->GetShape();
+
+  auto [cBounds, cTransform, cThickness] =
+      TGeoSurfaceConverter::cylinderComponents(*tgShape, rotation, translation,
+                                               axes, scalor);
+
+  if (cBounds != nullptr) {
+    m_transform = cTransform;
+    m_bounds = cBounds;
+    m_thickness = cThickness;
+    m_surface = Surface::makeShared<CylinderSurface>(cBounds, *this);
+  }
+
+  // Check next if you do not have a surface
+  if (m_surface == nullptr) {
+    auto [dBounds, dTransform, dThickness] =
+        TGeoSurfaceConverter::discComponents(*tgShape, rotation, translation,
+                                             axes, scalor);
+    if (dBounds != nullptr) {
+      m_bounds = dBounds;
+      m_transform = dTransform;
+      m_thickness = dThickness;
+      m_surface = Surface::makeShared<DiscSurface>(dBounds, *this);
+    }
+  }
+
+  // Check next if you do not have a surface
+  if (m_surface == nullptr) {
+    auto [pBounds, pTransform, pThickness] =
+        TGeoSurfaceConverter::planeComponents(*tgShape, rotation, translation,
+                                              axes, scalor);
+    if (pBounds != nullptr) {
+      m_bounds = pBounds;
+      m_transform = pTransform;
+      m_thickness = pThickness;
+      m_surface = Surface::makeShared<PlaneSurface>(pBounds, *this);
+    }
+  }
+}
+
 TGeoDetectorElement::TGeoDetectorElement(
     const Identifier& identifier, const TGeoNode& tGeoNode,
     const TGeoMatrix& tGeoMatrix, const std::string& axes, double scalor,

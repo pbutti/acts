@@ -29,25 +29,27 @@ using Line2D = Eigen::Hyperplane<double, 2>;
 
 namespace ActsPlugins {
 
-// TODO:: REMOVE DUPLICATED CODE
+// TODO:: REMOVE DUPLICATED CODE PUTTING IT IN A SEPARATE FUNCTION TO CHECK THE
+// CONVERSION WITHOUT MATERIAL
+// TODO:: MAYBE IMPROVE THE CONVERSION CODE
 TGeoDetectorElement::TGeoDetectorElement(const Identifier& identifier,
                                          const TGeoNode& tGeoNode,
                                          const std::string& axes, double scalor)
     : DetectorElementBase(), m_detElement(&tGeoNode), m_identifier(identifier) {
   const TGeoMatrix* tGeoMatrix = nullptr;
+  auto nodeMatrix = dynamic_cast<const TGeoNodeMatrix*>(&tGeoNode);
 
-  if (auto nodeMatrix = dynamic_cast<const TGeoNodeMatrix*>(&tGeoNode)) {
+  if (nodeMatrix != nullptr) {
     tGeoMatrix = nodeMatrix->GetMatrix();
   } else {
     // No matrix available — this might be a TGeoNodeOffset, TGeoNode, etc.
-    // You can decide what to do here (throw, warn, default transform, ...)
     throw std::runtime_error(
         "TGeoDetectorElement()::Extracted node doesn't have an associated "
         "matrix. Use a different TGeoDetectorElement constructor");
   }
 
-  const Double_t* translation = tGeoMatrix.GetTranslation();
-  const Double_t* rotation = tGeoMatrix.GetRotationMatrix();
+  const Double_t* translation = tGeoMatrix->GetTranslation();
+  const Double_t* rotation = tGeoMatrix->GetRotationMatrix();
 
   auto sensor = m_detElement->GetVolume();
   auto tgShape = sensor->GetShape();

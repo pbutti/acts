@@ -35,5 +35,33 @@ std::shared_ptr<TGeoDetectorElement> BlueprintBuilder::createDetectorElement(
 
   return elem;
 }
+  
+  const TGeoNode* BlueprintBuilder::findDetElementByName(
+                                                         const TGeoNode* parent, const std::string& name) {
+    if (parent->GetName() == name) {
+      return parent;
+    }
+    
+    
+    int daughters = parent->GetNdaughters();
+    
+    for (int i = 0; i < daughters; i++) {
+      auto result = findDetElementByName(parent->GetDaughter(i),name);
+      // TODO:: Check nullptr?
+      return result;
+    }
 
+    return nullptr;
+  }
+  
+  const TGeoNode* BlueprintBuilder::findDetElementByName(
+                                                         const std::string& name) {
+    return findDetElementByName(world(), name);
+  }
+  
+  TGeoNode* BlueprintBuilder::world() const {
+    return m_cfg.world;
+  }
+  
+  
 }  // namespace ActsPlugins

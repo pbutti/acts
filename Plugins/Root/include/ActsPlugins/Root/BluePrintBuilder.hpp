@@ -47,6 +47,7 @@ class BlueprintBuilder {
     // TODO:: This should be directly the TGeo world volume
     std::string path = "";
     double lengthScale = 1.0;
+    TGeoNode* world;
   };
 
   explicit BlueprintBuilder(const Config& cfg,
@@ -75,16 +76,16 @@ class BlueprintBuilder {
 
   // LayerHelper layerHelper();
 
-  // static std::optional<TGeoNode> findDetElementByName(
-  //   const TGeoNode& parent, const std::string& name);
+  const TGeoNode* findDetElementByName(
+     const TGeoNode* parent, const std::string& name);
 
-  // std::optional<TGeoNode> findDetElementByName(
-  //   const std::string&o name);
+  const TGeoNode* findDetElementByName(
+     const std::string& name);
 
-  // static std::vector<TGeoNode> findDetElementByNamePattern(
+  //static std::vector<TGeoNode> findDetElementByNamePattern(
   //   const TGeoNode& parent, const std::regex& pattern);
 
-  // static std::vector<TGeoNode> findDetElementByNamePattern(
+  //static std::vector<TGeoNode> findDetElementByNamePattern(
   //  const std::regex& pattern);
 
   const Acts::Logger& logger() const { return *m_logger; }
@@ -93,9 +94,8 @@ class BlueprintBuilder {
   // static std::vector<TGeoNode> resolveSensitives(
   //   const TGeoNode& detElement);
 
-  TGeoVolume world() const;
-  TGeoNode world_node() const;
-
+  TGeoNode* world() const;
+  
   Config m_cfg;
 
   std::unique_ptr<const Acts::Logger> m_logger;

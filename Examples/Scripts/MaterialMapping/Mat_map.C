@@ -99,6 +99,16 @@ void Mat_map(std::string Val = "", std::string geantino = "", std::string name =
   gStyle->SetOptStat(0);
   gStyle->SetOptTitle(0);
 
+
+  double zMin = -4000.;
+  double zMax =  4000.;
+  int    zBin =  4000;
+
+  double rMin = 0.;
+  double rMax = 1500.;
+  int    rBin = 1500;
+
+
   TProfile * Val_X0_Eta = new TProfile("Val_X0_Eta","Val_X0_Eta",160,-4,4);
   TProfile * Val_X0_Phi = new TProfile("Val_X0_Phi","Val_X0_Phi",160,-4,4);
   TH2F * Val_X0_Eta_spread = new TH2F("Val_X0_Eta_spread","Val_X0_Eta_spread",160,-4,4,160,0,4);
@@ -140,13 +150,17 @@ void Mat_map(std::string Val = "", std::string geantino = "", std::string name =
   TLine *eta_4n = new TLine(-3000,110,3000,-110);
   eta_4n->SetLineColor(kRed);
 
+
+  
+  
+
   if(Val != ""){
     Val_file->Add(Val.c_str());
 
     // 2D map for Validation input
     TCanvas *VM = new TCanvas("VM","Validation Map") ;
     Val_file->Draw("mat_y:mat_z","std::abs(mat_x)<1");
-
+    
     eta_0->Draw("Same");
     eta_1p->Draw("Same");
     eta_1n->Draw("Same");
@@ -159,6 +173,47 @@ void Mat_map(std::string Val = "", std::string geantino = "", std::string name =
 
     VM->Print( (name+"/Val_mat_map.png").c_str());
     //VM->Print( (name+"/Val_mat_map.pdf").c_str());
+
+
+    //std::string mat_r = "sqrt(mat_x->at(hit)*mat_x->at(hit)+mat_y->at(hit)*mat_y->at(hit))";
+    std::string rvsz = "sqrt(mat_x*mat_x+mat_y*mat_y):mat_z";
+    TCanvas *VM_rvsz = new TCanvas("VM_rvsz","Material Validation Map");
+        
+    TH2F * trk_mat_z_vs_mat_r = new TH2F("trk_mat_z_vs_mat_r","trk_mat_z_vs_mat_r",zBin, zMin, zMax, rBin, rMin, rMax);
+    trk_mat_z_vs_mat_r->SetMarkerSize(0.25);
+    trk_mat_z_vs_mat_r->SetMarkerStyle(2);
+    trk_mat_z_vs_mat_r->SetMarkerColor(kBlack);
+    trk_mat_z_vs_mat_r->SetLineColor(kBlack);
+    trk_mat_z_vs_mat_r->SetStats(0);
+    trk_mat_z_vs_mat_r->SetTitle(0);
+
+    TH2F * geant_mat_z_vs_mat_r = new TH2F("geant_mat_z_vs_mat_r","geant_mat_z_vs_mat_r",zBin, zMin, zMax, rBin, rMin, rMax);
+    geant_mat_z_vs_mat_r->SetMarkerSize(0.004);
+    geant_mat_z_vs_mat_r->SetMarkerColor(kRed);
+    geant_mat_z_vs_mat_r->SetLineColor(kRed);
+    geant_mat_z_vs_mat_r->SetStats(0);
+    geant_mat_z_vs_mat_r->SetTitle(0);
+
+    std::string trk_plot    = rvsz +" >> trk_mat_z_vs_mat_r";
+    std::string geant4_plot = rvsz +" >> geant_mat_z_vs_mat_r";
+    Val_file->Draw(trk_plot.c_str(),"");
+    geantino_file->Draw(geant4_plot.c_str(),"");
+
+    trk_mat_z_vs_mat_r->Draw();
+    geant_mat_z_vs_mat_r->Draw("Same");
+        
+    eta_0->Draw("Same");
+    eta_1p->Draw("Same");
+    eta_1n->Draw("Same");
+    eta_2p->Draw("Same");
+    eta_2n->Draw("Same");
+    eta_3p->Draw("Same");
+    eta_3n->Draw("Same");
+    eta_4p->Draw("Same");
+    eta_4n->Draw("Same");
+
+    VM_rvsz->Print( (name+"/Val_g4_mat_map.pdf").c_str());
+    
 
     // X0 as function of Eta for Validation input
     TCanvas *VM_X0_Eta = new TCanvas("VM_X0_Eta","Validation X0 Eta") ;

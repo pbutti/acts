@@ -70,6 +70,9 @@ CylindricalSpacePointGrid2::CylindricalSpacePointGrid2(
       innerAngle = std::atan(xInner / yInner);
     }
 
+    std::cout<<"PF::SeedingOpt rMax "<<m_cfg.rMax<< " rMin "  << m_cfg.rMin<<std::endl;
+
+    
     // evaluating the azimutal deflection including the maximum impact parameter
     const float deltaAngleWithMaxD0 =
         std::abs(std::asin(m_cfg.impactMax / rMin) -
@@ -103,6 +106,10 @@ CylindricalSpacePointGrid2::CylindricalSpacePointGrid2(
 
     // set protection for large number of bins, by default it is large
     phiBins = std::min(phiBins, m_cfg.maxPhiBins);
+
+    std::cout<<"PF::SeedingOpt phiBins "<<phiBins<<std::endl;
+
+    
   }
 
   PhiAxisType phiAxis(AxisClosed, m_cfg.phiMin, m_cfg.phiMax, phiBins);

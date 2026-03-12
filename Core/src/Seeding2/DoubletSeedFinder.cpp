@@ -12,6 +12,7 @@
 #include "Acts/Utilities/MathHelpers.hpp"
 
 #include <stdexcept>
+#include <iostream>
 
 #include <boost/mp11.hpp>
 #include <boost/mp11/algorithm.hpp>
@@ -45,6 +46,8 @@ class Impl final : public DoubletSeedFinder {
                           DoubletsForMiddleSp& compatibleDoublets) const {
     const float impactMax =
         isBottomCandidate ? -m_cfg.impactMax : m_cfg.impactMax;
+
+    std::cout<<"PF::DoubletSeedFinder deltaRMax,Min = " << m_cfg.deltaRMax<<" " << m_cfg.deltaRMin<<std::endl;
 
     const float xM = middleSp.xy()[0];
     const float yM = middleSp.xy()[1];
@@ -81,6 +84,9 @@ class Impl final : public DoubletSeedFinder {
             break;
           }
         } else {
+
+          std::cout<<"PF::DoubletSeedFinder isTopCandidate = " << otherSp.zr()[1]<<" " << -rM<<std::endl;
+          
           // if r-distance is too small, try next SP in bin
           if (otherSp.zr()[1] - rM >= m_cfg.deltaRMin) {
             break;

@@ -30,12 +30,15 @@ void createAndFilterTriplets(TripletSeeder::Cache& cache,
     if (topDoublets.empty()) {
       break;
     }
-
+    
     cache.tripletTopCandidates.clear();
+
+    std::cout<<"PF::SeedingOpt createTripleTopCandidates "<<std::endl;
     tripletFinder.createTripletTopCandidates(spacePoints, spM, bottomDoublet,
                                              topDoublets,
                                              cache.tripletTopCandidates);
 
+    std::cout<<"PF::SeedingOpt filter triplets "<<std::endl;
     filter.filterTripletTopCandidates(spacePoints, spM, bottomDoublet,
                                       cache.tripletTopCandidates);
   }
@@ -89,6 +92,9 @@ void createSeedsFromGroupsImpl(
 
   // combine doublets to triplets
   if (tripletFinder.config().sortedByCotTheta) {
+
+    std::cout<<"PF::: sorted by CotTheta"<<std::endl;
+    
     cache.bottomDoublets.sortByCotTheta({0, cache.bottomDoublets.size()},
                                         cache.sortedBottoms);
     cache.topDoublets.sortByCotTheta({0, cache.topDoublets.size()},
@@ -99,11 +105,14 @@ void createSeedsFromGroupsImpl(
                             middleSp,
                             cache.topDoublets.subset(cache.sortedTops));
   } else {
+
+    std::cout<<"PF::: NOT sorted by CotTheta"<<std::endl;
+    
     createAndFilterTriplets(cache, tripletFinder, filter, spacePoints,
                             cache.bottomDoublets.range(), middleSp,
                             cache.topDoublets.range());
   }
-
+  
   filter.filterTripletsMiddleFixed(spacePoints, outputSeeds);
 }
 

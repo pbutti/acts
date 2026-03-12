@@ -18,6 +18,8 @@
 #include <boost/mp11.hpp>
 #include <boost/mp11/algorithm.hpp>
 
+#include <iostream>
+
 namespace Acts {
 
 namespace {
@@ -96,6 +98,9 @@ class Impl final : public TripletSeedFinder {
       const ConstSpacePointProxy2& spM,
       const DoubletsForMiddleSp::Proxy& bottomDoublet, TopDoublets& topDoublets,
       TripletTopCandidates& tripletTopCandidates) const {
+
+    std::cout<<"PF:: CreatePixelTripleTopCandidates "<<std::endl;
+    
     const float rM = spM.zr()[1];
     const float varianceZM = spM.varianceZ();
     const float varianceRM = spM.varianceR();
@@ -122,12 +127,24 @@ class Impl final : public TripletSeedFinder {
     // resolving with pT to p scaling --> only divide by sin^2(theta)
     // max approximation error for allowed scattering angles of 0.04 rad at
     // eta=infinity: ~8.5%
+
+    std::cout<<"PF:: Multiple Scattering2 "<< m_cfg.multipleScattering2<<std::endl;
     const float scatteringInRegion2 = m_cfg.multipleScattering2 * iSinTheta2;
 
     std::size_t topDoubletOffset = 0;
+    std::size_t keptTriplets = 0;
+    std::size_t seenTriplets = 0;
+    std::size_t cotThetaCut=0;
+    std::size_t divU0=0;
+    std::size_t helixCut=0;
+    std::size_t cotThetaPtCut=0;
+    std::size_t ipCut=0;
+    
     for (auto [topDoublet, topDoubletIndex] :
          zip(topDoublets, std::ranges::iota_view<std::size_t, std::size_t>(
                               0, topDoublets.size()))) {
+
+      seenTriplets++;
       const SpacePointIndex2 spT = topDoublet.spacePointIndex();
       const float cotThetaT = topDoublet.cotTheta();
 
@@ -163,12 +180,14 @@ class Impl final : public TripletSeedFinder {
           }
           topDoubletOffset = topDoubletIndex + 1;
         }
+        cotThetaCut++;
         continue;
       }
-
+      
       const float dU = topDoublet.u() - Ub;
       // protects against division by 0
       if (dU == 0) {
+        divU0++;
         continue;
       }
       // A and B are evaluated as a function of the circumference parameters
@@ -180,7 +199,9 @@ class Impl final : public TripletSeedFinder {
 
       // sqrt(S2)/B = 2 * helixradius
       // calculated radius must not be smaller than minimum radius
+      std::cout<<"PF:: minHelixDiameter2 "<<m_cfg.minHelixDiameter2<<std::endl;
       if (S2 < B2 * m_cfg.minHelixDiameter2) {
+        helixCut++;
         continue;
       }
 
@@ -199,22 +220,34 @@ class Impl final : public TripletSeedFinder {
           }
           topDoubletOffset = topDoubletIndex;
         }
+        cotThetaPtCut++;
         continue;
       }
-
+      
       // A and B allow calculation of impact params in U/V plane with linear
       // function
       // (in contrast to having to solve a quadratic function in x/y plane)
       const float im = std::abs((A - B * rM) * rM);
       if (im > m_cfg.impactMax) {
+        ipCut++;
         continue;
       }
 
       // inverse diameter is signed depending on if the curvature is
       // positive/negative in phi
       tripletTopCandidates.emplace_back(spT, B / std::sqrt(S2), im);
+
+      keptTriplets++;
+      
     }  // loop on tops
 
+    std::cout<<"seenDoublets="<<seenTriplets<<std::endl;
+    std::cout<<"keptDoublets="<<keptTriplets<<std::endl;
+    std::cout<<"cotThetaCut="<<cotThetaCut<<std::endl;
+    std::cout<<"divU0="<<divU0<<std::endl;
+    std::cout<<"helixCut="<<helixCut<<std::endl;
+    std::cout<<"ipCut="<<ipCut<<std::endl;
+    
     if constexpr (sortedByCotTheta) {
       // remove the top doublets that were skipped due to cotTheta sorting
       topDoublets = topDoublets.subrange(topDoubletOffset);

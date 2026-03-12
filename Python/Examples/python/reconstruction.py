@@ -880,6 +880,9 @@ def addGridTripletSeeding(
     """
     logLevel = acts.examples.defaultLogging(sequence, logLevel)()
 
+
+    print("PF:::: Setup GridTripletSeeding algorithm",seedFinderConfigArg.deltaRBottomSP[0])
+    
     seedingAlg = acts.examples.GridTripletSeedingAlgorithm(
         level=logLevel,
         inputSpacePoints=spacePoints,
@@ -918,6 +921,7 @@ def addGridTripletSeeding(
             phiMin=spacePointGridConfigArg.phi[0],
             phiMax=spacePointGridConfigArg.phi[1],
             phiBinDeflectionCoverage=spacePointGridConfigArg.phiBinDeflectionCoverage,
+            numPhiNeighbors=seedingAlgorithmConfigArg.numPhiNeighbors,
             maxPhiBins=spacePointGridConfigArg.maxPhiBins,
             zBinEdges=spacePointGridConfigArg.zBinEdges,
             zBinsCustomLooping=seedFinderConfigArg.zBinsCustomLooping,

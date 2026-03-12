@@ -97,6 +97,9 @@ GridTripletSeedingAlgorithm::GridTripletSeedingAlgorithm(
   m_gridConfig.rBinEdges = {};
   m_gridConfig.zBinEdges = m_cfg.zBinEdges;
   m_gridConfig.bFieldInZ = m_cfg.bFieldInZ;
+
+  std::cout<<"PF::SeedingOpt numPhiNeighbors ="<<m_cfg.numPhiNeighbors<<std::endl;
+  
   m_gridConfig.bottomBinFinder.emplace(m_cfg.numPhiNeighbors,
                                        m_cfg.zBinNeighborsBottom, 0);
   m_gridConfig.topBinFinder.emplace(m_cfg.numPhiNeighbors,
@@ -133,6 +136,8 @@ ProcessCode GridTripletSeedingAlgorithm::execute(
     const AlgorithmContext& ctx) const {
   const SpacePointContainer& spacePoints = m_inputSpacePoints(ctx);
 
+  std::cout<<"PF::SeedingOpt Grid Formation::"<<std::endl;
+  
   Acts::CylindricalSpacePointGrid2 grid(m_gridConfig,
                                         logger().cloneWithSuffix("Grid"));
 
@@ -200,9 +205,11 @@ ProcessCode GridTripletSeedingAlgorithm::execute(
   Acts::DoubletSeedFinder::Config bottomDoubletFinderConfig;
   bottomDoubletFinderConfig.spacePointsSortedByRadius = true;
   bottomDoubletFinderConfig.candidateDirection = Acts::Direction::Backward();
-  bottomDoubletFinderConfig.deltaRMin = std::isnan(m_cfg.deltaRMaxBottom)
+  bottomDoubletFinderConfig.deltaRMin = std::isnan(m_cfg.deltaRMinBottom)
                                             ? m_cfg.deltaRMin
                                             : m_cfg.deltaRMinBottom;
+
+  std::cout<<"PF::SeedingOpt bottomDoubletFinderConfig.deltaRMin " << bottomDoubletFinderConfig.deltaRMin << std::endl;
   bottomDoubletFinderConfig.deltaRMax = std::isnan(m_cfg.deltaRMaxBottom)
                                             ? m_cfg.deltaRMax
                                             : m_cfg.deltaRMaxBottom;

@@ -60,6 +60,8 @@ CylindricalSpacePointGridCreator::createGrid(
       innerAngle = std::atan(xInner / yInner);
     }
 
+    std::cout<<"PF:: config.deltaRMax " << config.deltaRMax<< "  rMin="<<rMin<<std::endl;
+
     // evaluating the azimutal deflection including the maximum impact parameter
     float deltaAngleWithMaxD0 =
         std::abs(std::asin(config.impactMax / (rMin)) -

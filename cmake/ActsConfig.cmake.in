@@ -123,6 +123,12 @@ if(PluginEDM4hep IN_LIST Acts_COMPONENTS)
     include(${CMAKE_CURRENT_LIST_DIR}/ActsPodioEdmTargets.cmake)
 endif()
 
+# GBL ships no imported target of its own, so its export set is installed
+# with the Acts package config (see thirdparty/GBL/CMakeLists.txt)
+if(PluginGBL IN_LIST Acts_COMPONENTS)
+    include(${CMAKE_CURRENT_LIST_DIR}/ActsGBLTargets.cmake)
+endif()
+
 # load **all** available components. we can not just include the requested
 # components since there can be interdependencies between them.
 if(NOT Acts_FIND_QUIETLY)

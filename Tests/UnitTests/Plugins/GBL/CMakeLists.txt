@@ -1,0 +1,3 @@
+set(unittest_extra_libraries ActsPluginGBL)
+
+add_unittest(ActsToGblStraightLine ActsToGblStraightLine.cpp)

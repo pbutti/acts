@@ -90,6 +90,14 @@ endif()
 if(PluginHashing IN_LIST Acts_COMPONENTS)
     find_dependency(Annoy @ANNOY_VERSION@ CONFIG EXACT)
 endif()
+if(PluginMille IN_LIST Acts_COMPONENTS)
+    find_dependency(Mille CONFIG)
+endif()
+if(PluginGBL IN_LIST Acts_COMPONENTS)
+    # GBL ships no imported target of its own, so its export set is installed
+    # with the Acts package config (see thirdparty/GBL/CMakeLists.txt)
+    include(${CMAKE_CURRENT_LIST_DIR}/ActsGBLTargets.cmake)
+endif()
 
 # dependencies that we have built ourselves but cannot be
 # straightforwardly handed to cmake

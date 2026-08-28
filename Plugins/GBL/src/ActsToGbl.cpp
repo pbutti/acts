@@ -11,11 +11,13 @@
 #include "Acts/Definitions/Alignment.hpp"
 #include "Acts/Definitions/Common.hpp"
 #include "Acts/Definitions/Direction.hpp"
+#include "Acts/Propagator/detail/JacobianEngine.hpp"
 #include "Acts/Propagator/detail/PointwiseMaterialInteraction.hpp"
 #include "Acts/Surfaces/CurvilinearSurface.hpp"
 #include "ActsAlignment/Kernel/detail/AlignmentEngine.hpp"
 
 #include <cmath>
+#include <optional>
 
 namespace ActsPlugins::ActsToGbl {
 
@@ -86,74 +88,76 @@ Matrix5 gblToActsBasis(const Matrix2& slopes) {
 
 /// @brief Path derivative of the free parameters, d(free)/d(path length).
 ///
-/// Uses the linear track model, i.e. the change of direction along the path is
-/// neglected. This is the same approximation the Acts alignment kernel makes
-/// when it builds @c alignmentToBoundDerivative, so the local fit and the
-/// alignment derivatives stay consistent with each other.
-Acts::FreeVector pathDerivative(const Acts::Vector3& direction) {
+/// dr/ds is the direction; d(dr/ds)/ds is the Lorentz term, matching what
+/// @c EigenStepperDefaultExtension::k computes for the first RK stage and
+/// what @c EigenStepper stores in @c state.derivative. Using the same
+/// expression here keeps the coordinate changes consistent with the
+/// bound-to-bound jacobians the fitter put on the track states.
+///
+/// Passing a zero field reduces this to the linear track model, which is the
+/// approximation the Acts alignment kernel makes.
+///
+/// @note Only the position part of this vector is constrained by the
+/// requirement that the curvilinear <-> bound round trip be the identity; the
+/// direction part cancels there. It does not cancel in the full point-to-point
+/// composition, so it has to be right for its own sake.
+Acts::FreeVector pathDerivative(const Acts::Vector3& direction, double qOverP,
+                                const Acts::Vector3& bField) {
   Acts::FreeVector derivative = Acts::FreeVector::Zero();
+  // dr/ds
   derivative.head<3>() = direction;
+  // d(dr/ds)/ds
+  derivative.segment<3>(Acts::eFreeDir0) = qOverP * direction.cross(bField);
   return derivative;
-}
-
-/// @brief Coordinate change from curvilinear parameters onto a surface.
-///
-/// Not simply the surface's free-to-bound projection applied to the
-/// curvilinear-to-free jacobian: the curvilinear plane and the surface pass
-/// through the same point but are tilted with respect to each other, so a
-/// varied track crosses them at points separated along the trajectory. The
-/// path correction (I + dFree/ds * ds/dFree) accounts for that slide. Without
-/// it the round trip curvilinear -> bound -> curvilinear loses
-/// sin^2(incidence), i.e. everything except normal incidence is wrong.
-///
-/// @see Acts::detail::boundToBoundTransportJacobian, which applies the same
-/// factor at its destination surface.
-Acts::BoundMatrix curvilinearToBound(const Acts::GeometryContext& gctx,
-                                     const Acts::Surface& surface,
-                                     const Acts::Vector3& position,
-                                     const Acts::Vector3& direction) {
-  const Acts::FreeToPathMatrix freeToPath =
-      surface.freeToPathDerivative(gctx, position, direction);
-  return surface.freeToBoundJacobian(gctx, position, direction) *
-         (Acts::FreeMatrix::Identity() + pathDerivative(direction) * freeToPath) *
-         Acts::CurvilinearSurface(direction).boundToFreeJacobian();
-}
-
-/// @brief Coordinate change from a surface onto the curvilinear frame.
-///
-/// The mirror image of @c curvilinearToBound: here the curvilinear plane is
-/// the destination, so it carries the path correction. Its normal is the track
-/// direction, which is why the correction reduces to the -direction outer
-/// product used by @c Acts::detail::boundToCurvilinearTransportJacobian.
-Acts::BoundMatrix boundToCurvilinear(const Acts::GeometryContext& gctx,
-                                     const Acts::Surface& surface,
-                                     const Acts::Vector3& position,
-                                     const Acts::Vector3& direction) {
-  Acts::FreeToBoundMatrix freeToCurvilinear =
-      Acts::CurvilinearSurface(direction).freeToBoundJacobian();
-  freeToCurvilinear.topLeftCorner<6, 3>() +=
-      (freeToCurvilinear * pathDerivative(direction)) *
-      (-1.0 * direction).transpose();
-  return freeToCurvilinear *
-         surface.boundToFreeJacobian(gctx, position, direction);
 }
 
 /// Transform the fitter's bound-to-bound jacobian into the curvilinear,
 /// GBL-ordered 5x5 jacobian between two consecutive points.
 ///
 /// The bound jacobian goes from the bound frame of @p prev to that of @p curr.
-/// Composing it with the two coordinate changes above turns it into a map from
-/// curvilinear parameters at @p prev onto curvilinear parameters at @p curr,
-/// which is then rebased into GBL's parameter ordering.
+/// Bracketing it with the two curvilinear <-> bound coordinate changes turns
+/// it into a map from curvilinear parameters at @p prev onto curvilinear
+/// parameters at @p curr, which is then rebased into GBL's parameter ordering.
+///
+/// Both coordinate changes are the Acts jacobian engine's own transport
+/// functions evaluated with an identity free transport, which reduces them to
+/// the pure change of frame. Nothing requires the engine's start
+/// parametrisation to belong to a real surface, so handing it the curvilinear
+/// bound-to-free jacobian gives the curvilinear -> bound direction. Going
+/// through the engine keeps the path correction (I + dFree/ds * ds/dFree) on
+/// exactly the convention the fitter used when it filled @c curr.jacobian; see
+/// the white paper linked in @c JacobianEngine.cpp. Without that correction the
+/// round trip loses sin^2(incidence), i.e. everything except normal incidence
+/// is wrong.
+///
+/// The full composition cannot be a single engine call: the engine transports
+/// in free parameters, while the fitter only stores the bound-to-bound product,
+/// from which the free transport cannot be recovered.
 Matrix5 toGblJacobian(const Acts::GeometryContext& gctx,
-                      const GblTrackState& prev, const GblTrackState& curr) {
+                      const GblTrackState& prev, const GblTrackState& curr,
+                      const Acts::FreeVector& prevPathDeriv,
+                      const Acts::FreeVector& currPathDeriv) {
   const Acts::Vector3 prevDir = prev.direction();
   const Acts::Vector3 currDir = curr.direction();
 
+  // curvilinear -> bound at the previous state
+  const Acts::BoundMatrix curvilinearToBound =
+      Acts::detail::boundToBoundTransportJacobian(
+          gctx, prev.freeParameters,
+          Acts::CurvilinearSurface(prevDir).boundToFreeJacobian(),
+          Acts::FreeMatrix::Identity(), prevPathDeriv, *prev.surface);
+
+  // bound -> curvilinear at the current state
+  Acts::BoundMatrix boundToCurvilinear = Acts::BoundMatrix::Zero();
+  Acts::FreeToBoundMatrix unusedFreeToBound = Acts::FreeToBoundMatrix::Zero();
+  Acts::detail::boundToCurvilinearTransportJacobian(
+      currDir,
+      curr.surface->boundToFreeJacobian(gctx, curr.position(), currDir),
+      Acts::FreeMatrix::Identity(), unusedFreeToBound, currPathDeriv,
+      boundToCurvilinear);
+
   const Acts::BoundMatrix curvJacobian =
-      boundToCurvilinear(gctx, *curr.surface, curr.position(), currDir) *
-      curr.jacobian *
-      curvilinearToBound(gctx, *prev.surface, prev.position(), prevDir);
+      boundToCurvilinear * curr.jacobian * curvilinearToBound;
 
   // drop the time row/column and change basis into GBL's ordering. The
   // slope block is direction dependent, hence evaluated at either end.
@@ -165,7 +169,7 @@ Matrix5 toGblJacobian(const Acts::GeometryContext& gctx,
 }  // namespace
 
 Acts::Result<GblConversionResult> buildGblPoints(
-    const Acts::GeometryContext& gctx,
+    const Acts::GeometryContext& gctx, const Acts::MagneticFieldContext& mctx,
     const std::vector<GblTrackState>& states,
     const std::unordered_map<const Acts::Surface*, std::size_t>&
         idxedAlignSurfaces,
@@ -179,16 +183,46 @@ Acts::Result<GblConversionResult> buildGblPoints(
   GblConversionResult result;
   result.points.reserve(states.size());
 
+  std::optional<Acts::MagneticFieldProvider::Cache> fieldCache;
+  if (opts.magneticField != nullptr) {
+    fieldCache = opts.magneticField->makeCache(mctx);
+  } else {
+    ACTS_DEBUG(
+        "No magnetic field configured - using the linear track model for the "
+        "path derivative. This is exact only without a field.");
+  }
+
+  // d(free)/ds at each state, needed by the curvilinear <-> bound changes
+  const auto pathDerivativeAt =
+      [&](const GblTrackState& state) -> Acts::FreeVector {
+    Acts::Vector3 bField = Acts::Vector3::Zero();
+    if (fieldCache.has_value()) {
+      auto fieldRes = opts.magneticField->getField(state.position(), *fieldCache);
+      if (fieldRes.ok()) {
+        bField = *fieldRes;
+      } else {
+        ACTS_WARNING("Magnetic field lookup failed at "
+                     << state.position().transpose()
+                     << " - falling back to the linear track model here");
+      }
+    }
+    return pathDerivative(state.direction(), state.qOverP(), bField);
+  };
+
   std::size_t nMeasurements = 0;
+  Acts::FreeVector prevPathDeriv = Acts::FreeVector::Zero();
 
   for (std::size_t iState = 0; iState < states.size(); ++iState) {
     const GblTrackState& state = states[iState];
+    const Acts::FreeVector currPathDeriv = pathDerivativeAt(state);
 
     // (1) jacobian from the previous point. GBL expects the identity for the
     // very first point of the trajectory.
     const Matrix5 jacobian =
         (iState == 0) ? Matrix5::Identity()
-                      : toGblJacobian(gctx, states[iState - 1], state);
+                      : toGblJacobian(gctx, states[iState - 1], state,
+                                      prevPathDeriv, currPathDeriv);
+    prevPathDeriv = currPathDeriv;
 
     gbl::GblPoint point(jacobian);
 
@@ -257,14 +291,20 @@ Acts::Result<GblConversionResult> buildGblPoints(
       if (opts.addGlobals) {
         if (auto it = idxedAlignSurfaces.find(state.surface);
             it != idxedAlignSurfaces.end()) {
-          // linear track model, as in the Acts alignment kernel
-          Acts::FreeVector pathDerivative = Acts::FreeVector::Zero();
-          pathDerivative.head<3>() = direction;
-
+          // Use the very same path derivative as the coordinate changes
+          // above. Acts::Surface::alignmentToBoundDerivative folds it in with
+          // the same rank-one structure (Surface.cpp: alignToBound =
+          // alignToBoundWithoutCorrection + jacToLocal * pathDerivative *
+          // alignToPath), so sharing it keeps the local fit and the alignment
+          // derivatives on one convention.
+          //
+          // @note The Acts alignment kernel hard-codes the linear model here.
+          // With a field configured this deliberately differs from it, in
+          // favour of agreeing with the fitter's own jacobians.
           Acts::AlignmentToBoundMatrix alignToBound =
               state.surface->alignmentToBoundDerivative(gctx, position,
                                                         direction,
-                                                        pathDerivative);
+                                                        currPathDeriv);
           ActsAlignment::detail::resetAlignmentDerivative(alignToBound,
                                                           opts.alignMask);
 

@@ -10,6 +10,7 @@
 
 #include "Acts/Definitions/TrackParametrization.hpp"
 #include "Acts/Geometry/GeometryContext.hpp"
+#include "Acts/MagneticField/MagneticFieldContext.hpp"
 #include "Acts/Propagator/detail/JacobianEngine.hpp"
 #include "Acts/Surfaces/CurvilinearSurface.hpp"
 #include "Acts/Surfaces/PlaneSurface.hpp"
@@ -42,6 +43,7 @@ namespace {
 /// immediately as a large chi2.
 void checkStraightLineClosure(double theta, double phi) {
   GeometryContext gctx = GeometryContext::dangerouslyDefaultConstruct();
+  MagneticFieldContext mctx;
   auto logger = getDefaultLogger("ActsToGbl", Logging::WARNING);
 
   const Vector3 dir(std::sin(theta) * std::cos(phi),
@@ -109,7 +111,7 @@ void checkStraightLineClosure(double theta, double phi) {
   options.addScatterers = false;
   options.addGlobals = false;
 
-  auto result = buildGblPoints(gctx, states, {}, options, *logger);
+  auto result = buildGblPoints(gctx, mctx, states, {}, options, *logger);
   BOOST_REQUIRE(result.ok());
   BOOST_CHECK_EQUAL(result->points.size(), arcLength.size());
 
@@ -153,6 +155,7 @@ void checkStraightLineClosure(double theta, double phi) {
 /// far below the tolerance.
 void checkTiltedClosure(double tiltAngle) {
   GeometryContext gctx = GeometryContext::dangerouslyDefaultConstruct();
+  MagneticFieldContext mctx;
   auto logger = getDefaultLogger("ActsToGbl", Logging::WARNING);
 
   const double theta = 1.1;
@@ -243,7 +246,7 @@ void checkTiltedClosure(double tiltAngle) {
   options.addScatterers = false;
   options.addGlobals = false;
 
-  auto result = buildGblPoints(gctx, states, {}, options, *logger);
+  auto result = buildGblPoints(gctx, mctx, states, {}, options, *logger);
   BOOST_REQUIRE(result.ok());
 
   gbl::GblTrajectory trajectory(result->points, false);

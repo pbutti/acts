@@ -14,6 +14,8 @@
 #include "Acts/EventData/ParticleHypothesis.hpp"
 #include "Acts/EventData/Types.hpp"
 #include "Acts/Geometry/GeometryContext.hpp"
+#include "Acts/MagneticField/MagneticFieldContext.hpp"
+#include "Acts/MagneticField/MagneticFieldProvider.hpp"
 #include "Acts/Surfaces/Surface.hpp"
 #include "Acts/Utilities/Logger.hpp"
 #include "Acts/Utilities/Result.hpp"
@@ -102,6 +104,21 @@ struct GblConversionOptions {
   /// Default is pion
   Acts::ParticleHypothesis particleHypothesis = Acts::ParticleHypothesis::pion();
 
+  /// Magnetic field provider.
+  ///
+  /// When set, the path derivative d(free)/ds used by the curvilinear <->
+  /// bound coordinate changes includes the Lorentz term
+  /// dT/ds = (q/p) T x B, which is what the stepper used when it built the
+  /// bound-to-bound jacobians stored on the track states
+  /// (@c EigenStepper.ipp, @c EigenStepperDefaultExtension::k).
+  ///
+  /// When left null the linear track model is used instead, i.e. dT/ds = 0.
+  /// That is exact in a field-free setup and is the approximation the Acts
+  /// alignment kernel makes, but it is inconsistent with the fitter's own
+  /// jacobians at the 1e-4 (10 GeV) to 1e-3 (100 MeV) level, growing with the
+  /// incidence angle. Prefer passing the field.
+  std::shared_ptr<const Acts::MagneticFieldProvider> magneticField = nullptr;
+
   /// Minimal measurement precision accepted by GBL
   double minPrecision = 0.;
 
@@ -132,6 +149,8 @@ struct GblConversionResult {
 /// (q/p, u'_1, u'_2, u_1, u_2), which is what @c gbl::GblPoint expects.
 ///
 /// @param gctx The geometry context the track was fitted in
+/// @param mctx The magnetic field context, used only when
+///        @c GblConversionOptions::magneticField is set
 /// @param states The track states, ordered along the trajectory
 /// @param idxedAlignSurfaces Alignable surfaces and their global index. Used
 ///        to build the Millepede labels, with the exact same convention as
@@ -141,7 +160,7 @@ struct GblConversionResult {
 ///
 /// @return The GBL points, or an error
 Acts::Result<GblConversionResult> buildGblPoints(
-    const Acts::GeometryContext& gctx,
+    const Acts::GeometryContext& gctx, const Acts::MagneticFieldContext& mctx,
     const std::vector<GblTrackState>& states,
     const std::unordered_map<const Acts::Surface*, std::size_t>&
         idxedAlignSurfaces,
@@ -211,13 +230,14 @@ std::vector<GblTrackState> extractGblTrackStates(
 /// @see extractGblTrackStates and buildGblPoints
 template <typename track_proxy_t>
 Acts::Result<GblConversionResult> convertTrackToGbl(
-    const Acts::GeometryContext& gctx, const track_proxy_t& track,
+    const Acts::GeometryContext& gctx, const Acts::MagneticFieldContext& mctx,
+    const track_proxy_t& track,
     const std::unordered_map<const Acts::Surface*, std::size_t>&
         idxedAlignSurfaces,
     const GblConversionOptions& opts, const Acts::Logger& logger) {
   GblConversionOptions localOpts = opts;
   localOpts.particleHypothesis = track.particleHypothesis();
-  return buildGblPoints(gctx, extractGblTrackStates(gctx, track),
+  return buildGblPoints(gctx, mctx, extractGblTrackStates(gctx, track),
                         idxedAlignSurfaces, localOpts, logger);
 }
 

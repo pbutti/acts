@@ -22,6 +22,7 @@
 #include "ActsPlugins/Mille/ActsToMille.hpp"
 
 #include <fstream>
+#include <iomanip>
 #include <memory>
 #include <mutex>
 
@@ -40,6 +41,16 @@ MillePedeAlignmentSandbox::MillePedeAlignmentSandbox(
   }
   m_inputTracks.initialize(m_cfg.inputTracks);
   m_inputMeasurements.initialize(m_cfg.inputMeasurements);
+
+  if (!m_cfg.structures.empty() && !m_cfg.fixModules.empty()) {
+    throw std::invalid_argument(
+        "fixModules must be empty when aligning structures: surfaces outside "
+        "all structures are fixed");
+  }
+  if (!m_cfg.structures.empty() && needInternalSolving()) {
+    throw std::invalid_argument(
+        "The internal solver does not support aligning structures");
+  }
 
   // retrieve tracking geo
   m_trackingGeometry = m_cfg.trackingGeometry;
@@ -85,10 +96,15 @@ ProcessCode MillePedeAlignmentSandbox::initialize() {
     if (m_firstSurf == nullptr) {
       m_firstSurf = surface;
     }
-    if (!m_cfg.fixModules.contains(geoID)) {
+    if (m_cfg.structures.empty() && !m_cfg.fixModules.contains(geoID)) {
       m_indexedAlignSurfaces.emplace(surface, iSurface);
       iSurface++;
     }
+  }
+
+  if (!m_cfg.structures.empty() &&
+      indexStructures(sortedGeo) != ProcessCode::SUCCESS) {
+    return ProcessCode::ABORT;
   }
 
   // spawn a Mille binary to record our alignment inputs.
@@ -182,8 +198,9 @@ ProcessCode MillePedeAlignmentSandbox::execute(
     // and, if successful, dump the information into our Mille record.
     if (aliStates.ok()) {
       const ActsAlignment::detail::TrackAlignmentState& state = *aliStates;
-      ActsPlugins::ActsToMille::dumpToMille(state, *m_milleOut,
-                                            m_cfg.discardUnconstrainedTrackPar);
+      ActsPlugins::ActsToMille::dumpToMille(
+          state, *m_milleOut, m_cfg.discardUnconstrainedTrackPar,
+          m_composites.empty() ? nullptr : &m_composites);
       if (needInternalSolving()) {
         std::lock_guard g(m_mx_addState);
         m_alignmentStates.push_back(state);
@@ -193,6 +210,93 @@ ProcessCode MillePedeAlignmentSandbox::execute(
 
   return ProcessCode::SUCCESS;
 }
+ProcessCode MillePedeAlignmentSandbox::indexStructures(
+    const std::vector<
+        std::pair<Acts::GeometryIdentifier, const Acts::Surface*>>& sortedGeo) {
+  // The Jacobians are evaluated once, on the nominal geometry. Misalignments
+  // change them only at second order.
+  const auto gctx = Acts::GeometryContext::dangerouslyDefaultConstruct();
+
+  auto matches = [](const Acts::GeometryIdentifier& selector,
+                    const Acts::GeometryIdentifier& geoID) {
+    return (selector.volume() == 0 || selector.volume() == geoID.volume()) &&
+           (selector.layer() == 0 || selector.layer() == geoID.layer()) &&
+           (selector.sensitive() == 0 ||
+            selector.sensitive() == geoID.sensitive());
+  };
+
+  std::ofstream structFile;
+  if (!m_cfg.outFileStructures.empty()) {
+    structFile.open(m_cfg.outFileStructures);
+    structFile
+        << "# Mille label = 6 * index + dof + 1, dof 0-2: translation "
+           "along the frame axes [mm], 3-5: rotation about them [rad]\n"
+        << "# frame: global = R * local + t\n"
+        << "# index firstLabel volume layer sensitive nSurfaces tx ty tz "
+           "R00 R01 R02 R10 R11 R12 R20 R21 R22\n";
+  }
+
+  std::size_t iSurface = 0;
+  for (std::size_t iStruct = 0; iStruct < m_cfg.structures.size(); ++iStruct) {
+    const auto& structure = m_cfg.structures[iStruct];
+
+    std::vector<const Acts::Surface*> members;
+    Acts::Vector3 centerSum = Acts::Vector3::Zero();
+    for (const auto& [geoID, surface] : sortedGeo) {
+      // passive surfaces can carry sensitive identifiers but do not move
+      if (surface->isSensitive() && surface->isAlignable() &&
+          matches(structure.selector, geoID)) {
+        members.push_back(surface);
+        centerSum += surface->center(gctx);
+      }
+    }
+    if (members.empty()) {
+      ACTS_FATAL("No alignable surface selected by structure "
+                 << iStruct << " (" << structure.selector << ")");
+      return ProcessCode::ABORT;
+    }
+
+    const Acts::Transform3 frame =
+        structure.transform.value_or(Acts::Transform3(Acts::Translation3(
+            centerSum / static_cast<double>(members.size()))));
+
+    for (const Acts::Surface* surface : members) {
+      auto [it, inserted] = m_composites.emplace(
+          surface, ActsPlugins::ActsToMille::makeCompositeLink(
+                       iStruct, frame, surface->localToGlobalTransform(gctx)));
+      if (!inserted) {
+        ACTS_FATAL("Surface "
+                   << surface->geometryId() << " belongs to structures "
+                   << it->second.structureIndex << " and " << iStruct);
+        return ProcessCode::ABORT;
+      }
+      m_indexedAlignSurfaces.emplace(surface, iSurface++);
+    }
+
+    ACTS_INFO("Structure " << iStruct << " (" << structure.selector << "): "
+                           << members.size() << " surfaces, frame origin "
+                           << frame.translation().transpose());
+    if (structFile.is_open()) {
+      const Acts::RotationMatrix3 rotation = frame.rotation();
+      structFile << iStruct << " " << Acts::eAlignmentSize * iStruct + 1 << " "
+                 << structure.selector.volume() << " "
+                 << structure.selector.layer() << " "
+                 << structure.selector.sensitive() << " " << members.size()
+                 << std::setprecision(12);
+      for (int i = 0; i < 3; ++i) {
+        structFile << " " << frame.translation()(i);
+      }
+      for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
+          structFile << " " << rotation(i, j);
+        }
+      }
+      structFile << "\n";
+    }
+  }
+  return ProcessCode::SUCCESS;
+}
+
 bool MillePedeAlignmentSandbox::needInternalSolving() const {
   if (m_cfg.outFileInternalSolving.empty() &&
       m_cfg.outFileDecomposition.empty()) {

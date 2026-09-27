@@ -19,8 +19,10 @@
 #include "ActsExamples/EventData/Track.hpp"
 #include "ActsExamples/Framework/DataHandle.hpp"
 #include "ActsExamples/Framework/IAlgorithm.hpp"
+#include "ActsPlugins/Mille/ActsToMille.hpp"
 
 #include <memory>
+#include <optional>
 
 #include "Mille/MilleFactory.h"
 
@@ -59,6 +61,18 @@ class MillePedeAlignmentSandbox final : public IAlgorithm {
   using AlignmentParameters =
       std::unordered_map<Acts::SurfacePlacementBase*, Acts::Transform3>;
 
+  /// A composite structure aligned as a rigid body, e.g. a stave or a layer
+  struct AlignmentStructure {
+    /// Selects the member surfaces: the non-zero volume / layer / sensitive
+    /// fields must match. Only sensitive surfaces backed by a detector element
+    /// (Surface::isAlignable) are members.
+    Acts::GeometryIdentifier selector;
+    /// Local-to-global transform of the structure frame, in which its
+    /// alignment parameters are defined. If unset, the frame has the global
+    /// orientation and is centred on the mean of the member surface centers.
+    std::optional<Acts::Transform3> transform = std::nullopt;
+  };
+
   /// configuration
   struct Config {
     /// name of the mille output binary. You can choose
@@ -88,6 +102,17 @@ class MillePedeAlignmentSandbox final : public IAlgorithm {
     /// output file name to use for performing decomposition analysis.
     /// Setting this to an empty string will skip the step.
     std::string outFileDecomposition = "";
+
+    /// If not empty, write the derivatives w.r.t. the local-frame alignment
+    /// parameters of these structures instead of those of the single surfaces.
+    /// Structure i has the Mille labels 6 * i + dof + 1. Surfaces outside all
+    /// structures are fixed, so fixModules must be empty, and the internal
+    /// solver is not available.
+    std::vector<AlignmentStructure> structures;
+
+    /// Output text file mapping the Mille labels to the aligned structures
+    /// and their frames. Skipped if empty.
+    std::string outFileStructures = "";
   };
 
   /// Constructor of the sandbox algorithm
@@ -115,6 +140,12 @@ class MillePedeAlignmentSandbox final : public IAlgorithm {
   /// check if we need to run internal solving
   bool needInternalSolving() const;
 
+  /// index the surfaces of the configured structures and link them to their
+  /// structure
+  ProcessCode indexStructures(
+      const std::vector<std::pair<Acts::GeometryIdentifier,
+                                  const Acts::Surface*>>& sortedGeo);
+
   /// solve using the baseline ACTS infrastructure
   ProcessCode solveInternal();
 
@@ -135,6 +166,8 @@ class MillePedeAlignmentSandbox final : public IAlgorithm {
       m_alignmentStates;
 
   std::unordered_map<const Acts::Surface*, std::size_t> m_indexedAlignSurfaces;
+  /// structure of each aligned surface, used if structures are configured
+  ActsPlugins::ActsToMille::CompositeMap m_composites;
   const Acts::Surface* m_firstSurf = nullptr;
 
   mutable std::mutex m_mx_addState;

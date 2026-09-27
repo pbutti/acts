@@ -10,6 +10,8 @@
 #include "ActsExamples/AlignmentMillePede/MillePedeAlignmentSandbox.hpp"
 #include "ActsPython/Utilities/Macros.hpp"
 
+#include <optional>
+
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
@@ -20,11 +22,24 @@ using namespace ActsExamples;
 using namespace ActsPython;
 
 PYBIND11_MODULE(ActsExamplesPythonBindingsAlignmentMillePede, m) {
-  ACTS_PYTHON_DECLARE_ALGORITHM(
-      MillePedeAlignmentSandbox, m, "MillePedeAlignmentSandbox", milleOutput,
-      inputMeasurements, inputTracks, trackingGeometry, magneticField,
-      fixModules, discardUnconstrainedTrackPar, outFileInternalSolving,
-      outFileDecomposition);
+  {
+    auto [alg, c] = declareAlgorithm<MillePedeAlignmentSandbox, IAlgorithm>(
+        m, "MillePedeAlignmentSandbox");
+    ACTS_PYTHON_STRUCT(c, milleOutput, inputMeasurements, inputTracks,
+                       trackingGeometry, magneticField, fixModules,
+                       discardUnconstrainedTrackPar, outFileInternalSolving,
+                       outFileDecomposition, structures, outFileStructures);
+
+    using AlignmentStructure = MillePedeAlignmentSandbox::AlignmentStructure;
+    auto s = py::class_<AlignmentStructure>(alg, "AlignmentStructure")
+                 .def(py::init<>())
+                 .def(py::init([](const GeometryIdentifier& selector,
+                                  const std::optional<Transform3>& transform) {
+                        return AlignmentStructure{selector, transform};
+                      }),
+                      py::arg("selector"), py::arg("transform") = py::none());
+    ACTS_PYTHON_STRUCT(s, selector, transform);
+  }
   ACTS_PYTHON_DECLARE_ALGORITHM(ActsSolverFromMille, m, "ActsSolverFromMille",
                                 milleInput, trackingGeometry, magneticField,
                                 fixModules, outFile);

@@ -9,6 +9,7 @@
 #include "ActsPlugins/Mille/ActsToMille.hpp"
 
 #include "Acts/Definitions/Algebra.hpp"
+#include "Acts/Surfaces/detail/AlignmentHelper.hpp"
 #include "ActsPlugins/Mille/Helpers.hpp"
 
 #include <algorithm>
@@ -42,8 +43,20 @@ unsigned long globalIndexSurfToParam(unsigned long surfaceIndex,
 
 }  // namespace
 
+CompositeLink makeCompositeLink(std::size_t structureIndex,
+                                const Acts::Transform3& structureTransform,
+                                const Acts::Transform3& surfaceTransform) {
+  // chain the structure motion to the surface local-frame parameters, then
+  // to the ACTS alignment parameters the derivatives are computed for
+  return {structureIndex, Acts::detail::localFrameToAlignmentParametersJacobian(
+                              surfaceTransform) *
+                              Acts::detail::compositeToComponentJacobian(
+                                  structureTransform, surfaceTransform)};
+}
+
 void dumpToMille(const ActsAlignment::detail::TrackAlignmentState& state,
-                 MilleRecord& record, bool removeUnconstrainedTrackPar) {
+                 MilleRecord& record, bool removeUnconstrainedTrackPar,
+                 const CompositeMap* composites) {
   // spawn a local buffer to be able to assemble the record without lock
   // contention.
   std::unique_ptr<Mille::MilleRecord> milleLocalBuf = record.spawnLocalBuffer();
@@ -61,6 +74,17 @@ void dumpToMille(const ActsAlignment::detail::TrackAlignmentState& state,
       aliParLocalToGlobal.emplace_back(
           internalIndexSurfToParam(localStartIndex, iPar),
           globalIndexSurfToParam(globalSurfIndex, iPar));
+    }
+  }
+
+  // in composite mode, the structure of each aligned surface on the track,
+  // keyed by the internal index of the surface
+  std::vector<std::pair<std::size_t, const CompositeLink*>> surfaceComposites;
+  if (composites != nullptr) {
+    for (auto& [surf, indices] : state.alignedSurfaces) {
+      if (auto it = composites->find(surf); it != composites->end()) {
+        surfaceComposites.emplace_back(indices.second, &it->second);
+      }
     }
   }
 
@@ -100,13 +124,36 @@ void dumpToMille(const ActsAlignment::detail::TrackAlignmentState& state,
   /// track parameters.
   /// TODO: Add explicit diagonalisation for correlated (stereo) measurements.
   for (std::size_t iMeas = 0; iMeas < state.measurementDim; ++iMeas) {
-    // arrange the global parameters correctly
-    for (auto& [srcGlobal, destGlobal] : aliParLocalToGlobal) {
-      // index for each global derivative
-      globalIndices[srcGlobal] = destGlobal;
-      // value for each global derivative
-      globalDeriv[srcGlobal] =
-          state.alignmentToResidualDerivative(iMeas, srcGlobal);
+    if (composites == nullptr) {
+      // arrange the global parameters correctly
+      for (auto& [srcGlobal, destGlobal] : aliParLocalToGlobal) {
+        // index for each global derivative
+        globalIndices[srcGlobal] = destGlobal;
+        // value for each global derivative
+        globalDeriv[srcGlobal] =
+            state.alignmentToResidualDerivative(iMeas, srcGlobal);
+      }
+    } else {
+      // chain the surface derivatives to the structure parameters. Several
+      // surfaces of the track can belong to the same structure, so sum
+      // their contributions to have each label only once.
+      std::map<int, double> structureDeriv;
+      for (auto& [localStartIndex, link] : surfaceComposites) {
+        const Acts::AlignmentRowVector surfaceDeriv =
+            state.alignmentToResidualDerivative.block<1, Acts::eAlignmentSize>(
+                iMeas, internalIndexSurfToParam(localStartIndex, 0));
+        const Acts::AlignmentRowVector deriv = surfaceDeriv * link->jacobian;
+        for (std::size_t iPar = 0; iPar < Acts::eAlignmentSize; ++iPar) {
+          structureDeriv[globalIndexSurfToParam(link->structureIndex, iPar)] +=
+              deriv(iPar);
+        }
+      }
+      globalIndices.clear();
+      globalDeriv.clear();
+      for (auto& [label, deriv] : structureDeriv) {
+        globalIndices.push_back(label);
+        globalDeriv.push_back(deriv);
+      }
     }
     // index that we show to Mille (differs from internal index if we
     // skip any parameters)

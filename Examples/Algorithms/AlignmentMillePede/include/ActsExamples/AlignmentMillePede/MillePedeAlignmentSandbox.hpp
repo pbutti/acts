@@ -171,6 +171,8 @@ class MillePedeAlignmentSandbox final : public IAlgorithm {
   const Acts::Surface* m_firstSurf = nullptr;
 
   mutable std::mutex m_mx_addState;
+  /// serialises the Mille record writing, see execute()
+  mutable std::mutex m_mx_milleWrite;
 };
 
 }  // namespace ActsExamples

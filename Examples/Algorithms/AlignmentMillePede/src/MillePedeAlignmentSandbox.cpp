@@ -175,10 +175,12 @@ ProcessCode MillePedeAlignmentSandbox::execute(
     cov(4, 4) = 0.05;
     cov(5, 5) = 1e8;
 
-    // Collect source links from this track
+    // Collect source links from this track. Iterate backwards: tracks that
+    // are only backward-linked (e.g. CKF output) have no stem index, and the
+    // fitter matches the source links to surfaces regardless of order.
     trackSourceLinks.clear();
     trackSourceLinks.reserve(track.nTrackStates());
-    for (const auto& state : track.trackStates()) {
+    for (const auto& state : track.trackStatesReversed()) {
       if (state.hasUncalibratedSourceLink()) {
         trackSourceLinks.push_back(state.getUncalibratedSourceLink());
       }
@@ -198,9 +200,15 @@ ProcessCode MillePedeAlignmentSandbox::execute(
     // and, if successful, dump the information into our Mille record.
     if (aliStates.ok()) {
       const ActsAlignment::detail::TrackAlignmentState& state = *aliStates;
-      ActsPlugins::ActsToMille::dumpToMille(
-          state, *m_milleOut, m_cfg.discardUnconstrainedTrackPar,
-          m_composites.empty() ? nullptr : &m_composites);
+      {
+        // Mille's local buffer is not enough: its writeRecord() integrates
+        // into the parent and writes it under two separate locks, so two
+        // threads can merge their tracks into one record.
+        std::lock_guard g(m_mx_milleWrite);
+        ActsPlugins::ActsToMille::dumpToMille(
+            state, *m_milleOut, m_cfg.discardUnconstrainedTrackPar,
+            m_composites.empty() ? nullptr : &m_composites);
+      }
       if (needInternalSolving()) {
         std::lock_guard g(m_mx_addState);
         m_alignmentStates.push_back(state);

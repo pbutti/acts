@@ -338,7 +338,7 @@ set(_acts_gbl_version 04.00.05)
 set(_acts_mille_version 01.01.02)
 set(_acts_mp2_version 05.01.06)
 set(_acts_onnxruntime_version 1.12.0)
-set(_acts_geomodel_version 6.8.0)
+set(_acts_geomodel_version 6.16.0)
 set(_acts_root_version 6.28.04) # first version with C++20 support
 set(_acts_tbb_version 2020.1)
 set(_acts_pythia8_version 8.310)
@@ -697,12 +697,6 @@ if(ACTS_SETUP_DETRAY)
             OR
             TRACCC_BUILD_TESTING
         )
-
-        set(DETRAY_GENERATE_METADATA
-            "itk_metadata"
-            CACHE STRING
-            "Semicolon-separated list of metadata generator scripts to run in this build"
-        )
     endif()
 
     add_subdirectory(Detray)
@@ -830,3 +824,5 @@ add_subdirectory(docs)
 # create cmake configuration files and environment setup script
 include(ActsCreatePackageConfig)
 include(ActsCreateSetup)
+
+acts_print_auto_enabled_options()

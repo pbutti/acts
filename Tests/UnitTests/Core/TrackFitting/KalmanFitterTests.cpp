@@ -303,6 +303,267 @@ BOOST_AUTO_TEST_CASE(OutputTrackParticleHypothesis) {
   tester.test_ParticleHypothesis(kfZero, kfOptions, start, rng);
 }
 
+namespace {
+
+/// Measurements of one straight track through the cubic test detector, in
+/// track order, from a fixed seed
+std::vector<Acts::SourceLink> makeOrderedSourceLinks(
+    const Acts::BoundTrackParameters& start) {
+  std::default_random_engine seqRng(4242);
+  auto measurements =
+      createMeasurements(tester.simPropagator, tester.geoCtx, tester.magCtx,
+                         start, tester.resolutions, seqRng);
+  return FitterTester::prepareSourceLinks(measurements.sourceLinks);
+}
+
+}  // namespace
+
+// Ordered input on a track that crosses every surface once: the sequential
+// assignment gives the same fit as the default assignment by surface, with
+// and without reverse filtering.
+BOOST_AUTO_TEST_CASE(SequentialAssignmentOrderedEqualsBySurface) {
+  auto start = makeParameters();
+  const auto sourceLinks = makeOrderedSourceLinks(start);
+  BOOST_REQUIRE_EQUAL(sourceLinks.size(), FitterTester::nMeasurements);
+
+  for (const bool reverse : {false, true}) {
+    BOOST_TEST_INFO("reverse filtering " << reverse);
+    auto kfOptions = makeDefaultKalmanFitterOptions();
+    kfOptions.referenceSurface = &start.referenceSurface();
+    kfOptions.reverseFiltering = reverse;
+    BOOST_CHECK(kfOptions.measurementAssignment ==
+                KalmanFitterMeasurementAssignment::BySurface);
+
+    Acts::TrackContainer tracks{Acts::VectorTrackContainer{},
+                                Acts::VectorMultiTrajectory{}};
+    auto bySurface = kfZero.fit(sourceLinks.begin(), sourceLinks.end(), start,
+                                kfOptions, tracks);
+    BOOST_REQUIRE(bySurface.ok());
+
+    kfOptions.measurementAssignment =
+        KalmanFitterMeasurementAssignment::Sequential;
+    auto sequential = kfZero.fit(sourceLinks.begin(), sourceLinks.end(), start,
+                                 kfOptions, tracks);
+    BOOST_REQUIRE(sequential.ok());
+
+    BOOST_CHECK_EQUAL(sequential->nMeasurements(), sourceLinks.size());
+    BOOST_CHECK_EQUAL(sequential->nMeasurements(), bySurface->nMeasurements());
+    BOOST_CHECK_EQUAL(sequential->nHoles(), bySurface->nHoles());
+    BOOST_REQUIRE(sequential->hasReferenceSurface());
+    BOOST_REQUIRE(bySurface->hasReferenceSurface());
+    BOOST_CHECK(
+        sequential->parameters().isApprox(bySurface->parameters(), 1e-12));
+    BOOST_CHECK(
+        sequential->covariance().isApprox(bySurface->covariance(), 1e-12));
+  }
+}
+
+// A measurement moved to the front of the input: the default assignment
+// ignores the order, the sequential one passes over the misplaced measurement
+// and its surface becomes a hole.
+BOOST_AUTO_TEST_CASE(SequentialAssignmentSkipsMisplacedMeasurement) {
+  auto start = makeParameters();
+  auto sourceLinks = makeOrderedSourceLinks(start);
+  BOOST_REQUIRE_EQUAL(sourceLinks.size(), FitterTester::nMeasurements);
+  // order: m3, m0, m1, m2, m4, m5
+  std::rotate(sourceLinks.begin(), std::next(sourceLinks.begin(), 3),
+              std::next(sourceLinks.begin(), 4));
+
+  auto kfOptions = makeDefaultKalmanFitterOptions();
+  Acts::TrackContainer tracks{Acts::VectorTrackContainer{},
+                              Acts::VectorMultiTrajectory{}};
+
+  auto bySurface = kfZero.fit(sourceLinks.begin(), sourceLinks.end(), start,
+                              kfOptions, tracks);
+  BOOST_REQUIRE(bySurface.ok());
+  BOOST_CHECK_EQUAL(bySurface->nMeasurements(), sourceLinks.size());
+  BOOST_CHECK_EQUAL(bySurface->nHoles(), 0u);
+
+  kfOptions.measurementAssignment =
+      KalmanFitterMeasurementAssignment::Sequential;
+  auto sequential = kfZero.fit(sourceLinks.begin(), sourceLinks.end(), start,
+                               kfOptions, tracks);
+  BOOST_REQUIRE(sequential.ok());
+  BOOST_CHECK_EQUAL(sequential->nMeasurements(), sourceLinks.size() - 1u);
+  BOOST_CHECK_EQUAL(sequential->nHoles(), 1u);
+
+  // No measurement may be passed over: m3 waits at the cursor until its
+  // surface is reached, after that m0 blocks the cursor for good
+  kfOptions.maxSkippedMeasurements = 0;
+  auto strict = kfZero.fit(sourceLinks.begin(), sourceLinks.end(), start,
+                           kfOptions, tracks);
+  BOOST_REQUIRE(strict.ok());
+  BOOST_CHECK_EQUAL(strict->nMeasurements(), 1u);
+}
+
+// Two input measurements on the same surface of a track that crosses it once:
+// the default assignment keeps the first one; the sequential one uses one on
+// the single visit and passes over the other. Neither applies one twice.
+BOOST_AUTO_TEST_CASE(SequentialAssignmentRepeatedSurface) {
+  auto start = makeParameters();
+  auto sourceLinks = makeOrderedSourceLinks(start);
+  BOOST_REQUIRE_EQUAL(sourceLinks.size(), FitterTester::nMeasurements);
+  // a second measurement on the surface of m2, right after it
+  sourceLinks.insert(std::next(sourceLinks.begin(), 3), sourceLinks[2]);
+
+  for (const auto assignment :
+       {KalmanFitterMeasurementAssignment::BySurface,
+        KalmanFitterMeasurementAssignment::Sequential}) {
+    auto kfOptions = makeDefaultKalmanFitterOptions();
+    kfOptions.measurementAssignment = assignment;
+    Acts::TrackContainer tracks{Acts::VectorTrackContainer{},
+                                Acts::VectorMultiTrajectory{}};
+    auto res = kfZero.fit(sourceLinks.begin(), sourceLinks.end(), start,
+                          kfOptions, tracks);
+    BOOST_REQUIRE(res.ok());
+    BOOST_CHECK_EQUAL(res->nMeasurements(), FitterTester::nMeasurements);
+    BOOST_CHECK_EQUAL(res->nHoles(), 0u);
+  }
+}
+
+// Sequential assignment with a chi2 cut. The true measurement on one surface
+// replaced by a far one: without a cut the sequential assignment uses it; with
+// the cut it is rejected at the cursor and kept as an outlier, so the fit
+// equals the one without that measurement, also when no measurement may be
+// passed over. A cut that every true measurement passes changes nothing.
+BOOST_AUTO_TEST_CASE(SequentialAssignmentChi2CutMakesOutlier) {
+  auto start = makeParameters();
+  std::default_random_engine seqRng(4244);
+  auto measurements =
+      createMeasurements(tester.simPropagator, tester.geoCtx, tester.magCtx,
+                         start, tester.resolutions, seqRng);
+  BOOST_REQUIRE_EQUAL(measurements.sourceLinks.size(),
+                      FitterTester::nMeasurements);
+  constexpr std::size_t kReplaced = 4;
+
+  const auto clean = FitterTester::prepareSourceLinks(measurements.sourceLinks);
+
+  auto displacedLinks = measurements.sourceLinks;
+  displacedLinks[kReplaced].parameters[0] += 20_mm;
+  const auto displaced = FitterTester::prepareSourceLinks(displacedLinks);
+
+  auto missingLinks = measurements.sourceLinks;
+  missingLinks.erase(std::next(missingLinks.begin(), kReplaced));
+  const auto missing = FitterTester::prepareSourceLinks(missingLinks);
+
+  for (const bool reverse : {false, true}) {
+    BOOST_TEST_INFO("reverse filtering " << reverse);
+    auto kfOptions = makeDefaultKalmanFitterOptions();
+    kfOptions.referenceSurface = &start.referenceSurface();
+    kfOptions.reverseFiltering = reverse;
+    Acts::TrackContainer tracks{Acts::VectorTrackContainer{},
+                                Acts::VectorMultiTrajectory{}};
+
+    auto cleanReference =
+        kfZero.fit(clean.begin(), clean.end(), start, kfOptions, tracks);
+    BOOST_REQUIRE(cleanReference.ok());
+    auto reference =
+        kfZero.fit(missing.begin(), missing.end(), start, kfOptions, tracks);
+    BOOST_REQUIRE(reference.ok());
+    BOOST_CHECK_EQUAL(reference->nMeasurements(),
+                      FitterTester::nMeasurements - 1u);
+    BOOST_CHECK_EQUAL(reference->nHoles(), 1u);
+
+    kfOptions.measurementAssignment =
+        KalmanFitterMeasurementAssignment::Sequential;
+    auto noCut = kfZero.fit(displaced.begin(), displaced.end(), start,
+                            kfOptions, tracks);
+    BOOST_REQUIRE(noCut.ok());
+    BOOST_CHECK_EQUAL(noCut->nMeasurements(), FitterTester::nMeasurements);
+    BOOST_CHECK_GT(noCut->chi2(), 100. * reference->chi2());
+
+    kfOptions.maxPredictedChi2 = 25.;
+    auto cleanCut =
+        kfZero.fit(clean.begin(), clean.end(), start, kfOptions, tracks);
+    BOOST_REQUIRE(cleanCut.ok());
+    BOOST_CHECK_EQUAL(cleanCut->nMeasurements(), FitterTester::nMeasurements);
+    BOOST_REQUIRE(cleanCut->hasReferenceSurface());
+    BOOST_CHECK(
+        cleanCut->parameters().isApprox(cleanReference->parameters(), 1e-12));
+
+    for (const std::size_t maxSkip :
+         {std::numeric_limits<std::size_t>::max(), std::size_t{0}}) {
+      BOOST_TEST_INFO("maxSkippedMeasurements " << maxSkip);
+      kfOptions.maxSkippedMeasurements = maxSkip;
+      auto cut = kfZero.fit(displaced.begin(), displaced.end(), start,
+                            kfOptions, tracks);
+      BOOST_REQUIRE(cut.ok());
+      BOOST_CHECK_EQUAL(cut->nMeasurements(), FitterTester::nMeasurements - 1u);
+      BOOST_CHECK_EQUAL(cut->nOutliers(), 1u);
+      BOOST_CHECK_EQUAL(cut->nHoles(), 0u);
+      BOOST_CHECK_CLOSE(cut->chi2(), reference->chi2(), 1e-6);
+      BOOST_REQUIRE(cut->hasReferenceSurface());
+      BOOST_CHECK(cut->parameters().isApprox(reference->parameters(), 1e-10));
+      BOOST_CHECK(cut->covariance().isApprox(reference->covariance(), 1e-10));
+      // The outlier state carries the rejected measurement
+      std::size_t nOutlierStates = 0;
+      for (const auto& state : cut->trackStatesReversed()) {
+        if (state.typeFlags().isOutlier()) {
+          ++nOutlierStates;
+          BOOST_CHECK(state.hasCalibrated());
+          BOOST_CHECK_EQUAL(state.getUncalibratedSourceLink()
+                                .template get<TestSourceLink>()
+                                .index(),
+                            displacedLinks[kReplaced].index());
+        }
+      }
+      BOOST_CHECK_EQUAL(nOutlierStates, 1u);
+    }
+  }
+}
+
+// Sequential assignment with a chi2 cut: a displaced decoy right before the
+// true measurement on the same surface. Without a cut the decoy is used and
+// the true one passed over; with the cut the decoy is rejected and the next
+// measurement in the window, the true one, is used: the fit equals the clean
+// one.
+BOOST_AUTO_TEST_CASE(SequentialAssignmentChi2CutTriesNextInWindow) {
+  auto start = makeParameters();
+  std::default_random_engine seqRng(4245);
+  auto measurements =
+      createMeasurements(tester.simPropagator, tester.geoCtx, tester.magCtx,
+                         start, tester.resolutions, seqRng);
+  BOOST_REQUIRE_EQUAL(measurements.sourceLinks.size(),
+                      FitterTester::nMeasurements);
+  constexpr std::size_t kDecoyed = 2;
+  const auto clean = FitterTester::prepareSourceLinks(measurements.sourceLinks);
+
+  auto decoyLinks = measurements.sourceLinks;
+  auto decoy = decoyLinks[kDecoyed];
+  decoy.parameters[0] += 20_mm;
+  decoyLinks.insert(std::next(decoyLinks.begin(), kDecoyed), decoy);
+  const auto decoyed = FitterTester::prepareSourceLinks(decoyLinks);
+
+  auto kfOptions = makeDefaultKalmanFitterOptions();
+  kfOptions.referenceSurface = &start.referenceSurface();
+  kfOptions.measurementAssignment =
+      KalmanFitterMeasurementAssignment::Sequential;
+  kfOptions.maxSkippedMeasurements = 1;
+  Acts::TrackContainer tracks{Acts::VectorTrackContainer{},
+                              Acts::VectorMultiTrajectory{}};
+
+  auto reference =
+      kfZero.fit(clean.begin(), clean.end(), start, kfOptions, tracks);
+  BOOST_REQUIRE(reference.ok());
+  BOOST_REQUIRE_EQUAL(reference->nMeasurements(), FitterTester::nMeasurements);
+
+  auto noCut =
+      kfZero.fit(decoyed.begin(), decoyed.end(), start, kfOptions, tracks);
+  BOOST_REQUIRE(noCut.ok());
+  BOOST_CHECK_EQUAL(noCut->nMeasurements(), FitterTester::nMeasurements);
+  BOOST_CHECK_GT(noCut->chi2(), 100. * reference->chi2());
+
+  kfOptions.maxPredictedChi2 = 25.;
+  auto cut =
+      kfZero.fit(decoyed.begin(), decoyed.end(), start, kfOptions, tracks);
+  BOOST_REQUIRE(cut.ok());
+  BOOST_CHECK_EQUAL(cut->nMeasurements(), FitterTester::nMeasurements);
+  BOOST_CHECK_EQUAL(cut->nHoles(), 0u);
+  BOOST_CHECK_CLOSE(cut->chi2(), reference->chi2(), 1e-6);
+  BOOST_REQUIRE(cut->hasReferenceSurface());
+  BOOST_CHECK(cut->parameters().isApprox(reference->parameters(), 1e-10));
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace ActsTests

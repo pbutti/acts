@@ -30,8 +30,11 @@
 #include "Acts/Utilities/Result.hpp"
 #include "Acts/Utilities/TrackHelpers.hpp"
 
+#include <algorithm>
+#include <limits>
 #include <memory>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace Acts {
@@ -100,6 +103,33 @@ struct KalmanFitterExtensions {
         .template connect<&detail::voidReverseFilteringLogic<traj_t>>();
     smoother.template connect<&detail::voidFitterSmoother<traj_t>>();
   }
+};
+
+/// How the Kalman fitter assigns the input measurements to the surfaces that
+/// the propagation reaches.
+enum class KalmanFitterMeasurementAssignment {
+  /// One measurement per surface, found by its surface. The input order does
+  /// not matter. If several input measurements share a surface, only the first
+  /// one is kept. A measurement is applied every time the propagation reaches
+  /// its surface. The fit is complete once every distinct measurement surface
+  /// carries a (non-outlier) measurement state. This is the default.
+  BySurface,
+  /// The measurements are used in input order, which must follow the track
+  /// (e.g. ordered by simulated hit time). Each measurement is used at most
+  /// once, and a surface can carry several measurements, one per visit, e.g.
+  /// for a looping track that crosses the same module on several turns.
+  /// When the propagation reaches a surface, the fitter looks for that surface
+  /// among the next `1 + maxSkippedMeasurements` unused measurements; the
+  /// measurements passed over are counted as skipped and not used later. With
+  /// a finite `maxPredictedChi2`, the measurements of the surface in that
+  /// window are tried in input order and the first one whose predicted chi2
+  /// does not exceed the cut is used. If none passes, the measurement at the
+  /// cursor, if it is on this surface, becomes an outlier (the order says this
+  /// is its crossing, so it is not kept for a later visit); otherwise the
+  /// surface is a hole and the cursor does not move. The fit is complete once
+  /// the last measurement has been used (as measurement or outlier). The
+  /// reverse filter uses the measurements in reverse order.
+  Sequential,
 };
 
 /// Combined options for the Kalman fitter.
@@ -183,6 +213,22 @@ struct KalmanFitterOptions {
   /// Whether to include non-linear correction during global to local
   /// transformation
   FreeToBoundCorrection freeToBoundCorrection;
+
+  /// How the input measurements are assigned to the surfaces reached by the
+  /// propagation. The default keeps one measurement per surface.
+  KalmanFitterMeasurementAssignment measurementAssignment =
+      KalmanFitterMeasurementAssignment::BySurface;
+
+  /// Sequential assignment only: the number of measurements the fitter may
+  /// pass over to reach the next measurement on the current surface. The
+  /// default allows any number.
+  std::size_t maxSkippedMeasurements = std::numeric_limits<std::size_t>::max();
+
+  /// Sequential assignment only: the largest predicted chi2
+  /// (not divided by the measurement dimension) of a measurement that may be
+  /// used (see KalmanFitterMeasurementAssignment for what happens to one
+  /// above it). The default accepts any.
+  double maxPredictedChi2 = std::numeric_limits<double>::infinity();
 };
 
 /// Result payload returned by the Kalman fitter.
@@ -223,6 +269,14 @@ struct KalmanFitterResult {
 
   /// Measurement surfaces without hits
   std::vector<const Surface*> missedActiveSurfaces;
+
+  /// Sequential measurement assignment only: index of the next unused input
+  /// measurement (in the order of the current filter direction)
+  std::size_t nextMeasurementIndex = 0;
+
+  /// Sequential measurement assignment only: number of input measurements
+  /// passed over without being used
+  std::size_t skippedMeasurements = 0;
 
   /// Path limit aborter
   PathLimitReached pathLimitReached;
@@ -281,8 +335,10 @@ class KalmanFitter {
 
   /// @brief Propagator Actor plugin for the KalmanFilter
   ///
-  /// The KalmanActor does not rely on the measurements to be
-  /// sorted along the track.
+  /// With the default BySurface measurement assignment, the KalmanActor does
+  /// not rely on the measurements to be sorted along the track. With the
+  /// Sequential assignment, it uses them in input order, which must follow the
+  /// track.
   class Actor {
    public:
     /// Broadcast the result_type
@@ -291,8 +347,24 @@ class KalmanFitter {
     /// The target surface aborter
     SurfaceReached targetReached{std::numeric_limits<double>::lowest()};
 
-    /// Allows retrieving measurements for a surface
+    /// Allows retrieving measurements for a surface (BySurface assignment)
     std::unordered_map<const Surface*, SourceLink> inputMeasurements;
+
+    /// How measurements are assigned to the reached surfaces
+    KalmanFitterMeasurementAssignment measurementAssignment =
+        KalmanFitterMeasurementAssignment::BySurface;
+
+    /// The measurements with their surfaces in the order of the filter
+    /// direction (Sequential assignment)
+    std::vector<std::pair<const Surface*, SourceLink>> sequentialMeasurements;
+
+    /// Sequential assignment: how many measurements may be passed over to
+    /// reach the next measurement on the current surface
+    std::size_t maxSkippedMeasurements =
+        std::numeric_limits<std::size_t>::max();
+
+    /// Sequential assignment: largest predicted chi2 of a used measurement
+    double maxPredictedChi2 = std::numeric_limits<double>::infinity();
 
     /// Whether to consider multiple scattering.
     bool multipleScattering = true;
@@ -380,8 +452,17 @@ class KalmanFitter {
 
       // Finalization:
       // when all track states have been handled or an aborter is triggered
-      const bool isTrackComplete =
-          result.measurementStates == inputMeasurements.size();
+      bool isTrackComplete = false;
+      switch (measurementAssignment) {
+        case KalmanFitterMeasurementAssignment::BySurface:
+          isTrackComplete =
+              result.measurementStates == inputMeasurements.size();
+          break;
+        case KalmanFitterMeasurementAssignment::Sequential:
+          isTrackComplete =
+              result.nextMeasurementIndex == sequentialMeasurements.size();
+          break;
+      }
       const bool isEndOfWorldReached =
           endOfWorldReached.checkAbort(state, stepper, navigator, logger());
       const bool isVolumeConstraintReached = volumeConstraintAborter.checkAbort(
@@ -436,6 +517,125 @@ class KalmanFitter {
       return result.finished;
     }
 
+    /// @brief Find the input measurement to use on a reached surface
+    ///
+    /// BySurface: the measurement stored for this surface, if any.
+    /// Sequential: the first unused measurement on this surface among the next
+    /// `1 + maxSkippedMeasurements` from the cursor; the cursor moves past it
+    /// and the measurements passed over are counted as skipped.
+    ///
+    /// @param surface The surface the propagation reached
+    /// @param result The mutable result state object (cursor)
+    /// @return The source link to calibrate, or nullptr if there is none
+    const SourceLink* findMeasurement(const Surface& surface,
+                                      result_type& result) const {
+      if (measurementAssignment ==
+          KalmanFitterMeasurementAssignment::BySurface) {
+        const auto it = inputMeasurements.find(&surface);
+        return it != inputMeasurements.end() ? &it->second : nullptr;
+      }
+      const std::size_t begin = result.nextMeasurementIndex;
+      const std::size_t end = sequentialWindowEnd(result);
+      for (std::size_t i = begin; i < end; ++i) {
+        if (sequentialMeasurements[i].first == &surface) {
+          return useSequentialMeasurement(i, surface, result);
+        }
+      }
+      return nullptr;
+    }
+
+    /// Sequential assignment: one past the last measurement the cursor may
+    /// reach, i.e. the window of `1 + maxSkippedMeasurements` measurements
+    std::size_t sequentialWindowEnd(const result_type& result) const {
+      const std::size_t begin = result.nextMeasurementIndex;
+      const std::size_t remaining = sequentialMeasurements.size() - begin;
+      return maxSkippedMeasurements >= remaining
+                 ? sequentialMeasurements.size()
+                 : begin + maxSkippedMeasurements + 1;
+    }
+
+    /// Sequential assignment: whether a measurement on this surface is in the
+    /// window
+    bool hasSequentialCandidate(const Surface& surface,
+                                const result_type& result) const {
+      const std::size_t end = sequentialWindowEnd(result);
+      for (std::size_t i = result.nextMeasurementIndex; i < end; ++i) {
+        if (sequentialMeasurements[i].first == &surface) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    /// Sequential assignment: use measurement @p i, count the ones before it
+    /// as skipped and move the cursor past it
+    const SourceLink* useSequentialMeasurement(std::size_t i,
+                                               const Surface& surface,
+                                               result_type& result) const {
+      const std::size_t begin = result.nextMeasurementIndex;
+      if (i > begin) {
+        ACTS_VERBOSE("Skip " << i - begin
+                             << " measurement(s) to reach the one on "
+                             << surface.geometryId());
+      }
+      result.skippedMeasurements += i - begin;
+      result.nextMeasurementIndex = i + 1;
+      return &sequentialMeasurements[i].second;
+    }
+
+    /// @brief Sequential assignment with a chi2 cut
+    ///
+    /// The measurements on the reached surface in the window are calibrated
+    /// into the track state, which must already hold the predicted
+    /// parameters, in input order; the first one whose predicted chi2 does
+    /// not exceed `maxPredictedChi2` is used (cursor and skip count as in
+    /// `findMeasurement`). The caller calibrates it again.
+    ///
+    /// If none passes and the measurement at the cursor is on this surface,
+    /// that one is returned as an outlier: the cursor moves past it.
+    ///
+    /// @param geoContext The geometry context for the calibrator
+    /// @param trackStateProxy The track state with the predicted parameters
+    /// @param result The mutable result state object (cursor)
+    /// @param[out] outlier Set if the returned measurement is the rejected
+    ///        one at the cursor
+    /// @return The source link to use, or nullptr if none passes the cut and
+    ///         the cursor measurement is not on this surface (the cursor
+    ///         does not move)
+    template <typename track_state_proxy_t>
+    const SourceLink* selectSequentialWithinCut(
+        const GeometryContext& geoContext, track_state_proxy_t& trackStateProxy,
+        result_type& result, bool& outlier) const {
+      outlier = false;
+      const Surface& surface = trackStateProxy.referenceSurface();
+      const std::size_t begin = result.nextMeasurementIndex;
+      const std::size_t end = sequentialWindowEnd(result);
+      for (std::size_t i = begin; i < end; ++i) {
+        if (sequentialMeasurements[i].first != &surface) {
+          continue;
+        }
+        extensions.calibrator(geoContext, *calibrationContext,
+                              sequentialMeasurements[i].second,
+                              trackStateProxy);
+        const double chi2 = calculatePredictedChi2(trackStateProxy);
+        // A NaN chi2 is rejected as well
+        if (chi2 <= maxPredictedChi2) {
+          return useSequentialMeasurement(i, surface, result);
+        }
+        ACTS_VERBOSE("Measurement " << i << " on " << surface.geometryId()
+                                    << " has predicted chi2 " << chi2
+                                    << " above the cut " << maxPredictedChi2
+                                    << ", not used");
+      }
+      if (begin < end && sequentialMeasurements[begin].first == &surface) {
+        // The order says this is the crossing of the cursor measurement:
+        // keeping it for a later visit could only use it on the wrong one
+        outlier = true;
+        return useSequentialMeasurement(begin, surface, result);
+      }
+      return nullptr;
+    }
+
     /// @brief Kalman actor operation: update
     ///
     /// @tparam propagator_state_t is the type of Propagator state
@@ -456,9 +656,18 @@ class KalmanFitter {
       const bool surfaceIsSensitive = surface.isSensitive();
       const bool surfaceHasMaterial = surface.hasMaterial();
 
-      // Try to find the surface in the measurement surfaces
-      const auto sourceLinkIt = inputMeasurements.find(&surface);
-      if (sourceLinkIt != inputMeasurements.end()) {
+      // Try to find a measurement for this surface
+      const SourceLink* sourceLink = nullptr;
+      // Sequential with a chi2 cut: the choice needs the predicted state
+      bool sequentialWithinCut = false;
+      if (measurementAssignment ==
+              KalmanFitterMeasurementAssignment::Sequential &&
+          maxPredictedChi2 != std::numeric_limits<double>::infinity()) {
+        sequentialWithinCut = hasSequentialCandidate(surface, result);
+      } else {
+        sourceLink = findMeasurement(surface, result);
+      }
+      if (sourceLink != nullptr || sequentialWithinCut) {
         // Screen output message
         ACTS_VERBOSE("Measurement surface " << surface.geometryId()
                                             << " detected.");
@@ -516,10 +725,52 @@ class KalmanFitter {
         trackStateProxy.jacobian() = *transportRes;
         trackStateProxy.pathLength() = stepper.pathLength(state.stepping);
 
+        // Sequential with a chi2 cut: the first measurement in the window that
+        // passes, else the cursor measurement as an outlier
+        bool rejectedAtCursor = false;
+        if (sequentialWithinCut) {
+          sourceLink = selectSequentialWithinCut(
+              state.geoContext, trackStateProxy, result, rejectedAtCursor);
+          if (sourceLink == nullptr) {
+            // No measurement passes the cut: finish the state like a surface
+            // without measurements. The pre-update material effects are already
+            // applied, the post-update ones follow.
+            trackStateProxy.unset(TrackStatePropMask::Calibrated);
+            trackStateProxy.shareFrom(trackStateProxy,
+                                      TrackStatePropMask::Predicted,
+                                      TrackStatePropMask::Filtered);
+            auto typeFlags = trackStateProxy.typeFlags();
+            typeFlags.setHasParameters();
+            if (surfaceHasMaterial) {
+              typeFlags.setHasMaterial();
+            }
+            if (surfaceIsSensitive && precedingMeasurementExists) {
+              ACTS_VERBOSE("Detected hole on " << surface.geometryId());
+              typeFlags.setIsHole();
+              result.missedActiveSurfaces.push_back(&surface);
+            }
+            result.lastTrackIndex = trackStateProxy.index();
+            ++result.processedStates;
+            const Result<detail::PointwiseMaterialEffects>
+                materialInteractionPostRes = detail::performMaterialInteraction(
+                    state, stepper, surface,
+                    detail::determineMaterialUpdateMode(
+                        state, navigator, MaterialUpdateMode::PostUpdate),
+                    NoiseUpdateMode::addNoise, multipleScattering, energyLoss,
+                    logger());
+            if (!materialInteractionPostRes.ok()) {
+              ACTS_DEBUG("Material interaction failed during filter: "
+                         << materialInteractionPostRes.error().message());
+              return materialInteractionPostRes.error();
+            }
+            return Result<void>::success();
+          }
+        }
+
         // We have predicted parameters, so calibrate the uncalibrated input
         // measurement
         extensions.calibrator(state.geoContext, *calibrationContext,
-                              sourceLinkIt->second, trackStateProxy);
+                              *sourceLink, trackStateProxy);
 
         // Get and set the type flags
         auto typeFlags = trackStateProxy.typeFlags();
@@ -534,7 +785,8 @@ class KalmanFitter {
         // - tag it as a measurement
         // - update the stepping state.
         // Else, just tag it as an outlier
-        if (!extensions.outlierFinder(trackStateProxyConst)) {
+        if (!rejectedAtCursor &&
+            !extensions.outlierFinder(trackStateProxyConst)) {
           // Allocate the filtered parameters right before they are written
           trackStateProxy.addComponents(TrackStatePropMask::Filtered);
           // Run Kalman update
@@ -758,13 +1010,28 @@ class KalmanFitter {
     const std::size_t nMeasurements = std::distance(it, end);
 
     // To be able to find measurements later, we put them into a map
-    // We need to copy input SourceLinks anyway, so the map can own them.
+    // (BySurface) or keep them in input order (Sequential). We need to copy
+    // input SourceLinks anyway, so the container can own them.
     ACTS_VERBOSE("Preparing " << nMeasurements << " input measurements");
+    const bool sequential = kfOptions.measurementAssignment ==
+                            KalmanFitterMeasurementAssignment::Sequential;
     std::unordered_map<const Surface*, SourceLink> inputMeasurements;
+    std::vector<std::pair<const Surface*, SourceLink>> sequentialMeasurements;
+    if (sequential) {
+      sequentialMeasurements.reserve(nMeasurements);
+    }
     for (; it != end; ++it) {
       SourceLink sl = *it;
       const Surface* surface = kfOptions.extensions.surfaceAccessor(sl);
-      inputMeasurements.try_emplace(surface, std::move(sl));
+      if (sequential) {
+        sequentialMeasurements.emplace_back(surface, std::move(sl));
+      } else {
+        inputMeasurements.try_emplace(surface, std::move(sl));
+      }
+    }
+    if (sequential && reverseDirection) {
+      // The reverse filter meets the measurements in reverse order
+      std::ranges::reverse(sequentialMeasurements);
     }
 
     // Create relevant options for the propagation options
@@ -784,6 +1051,15 @@ class KalmanFitter {
       for (const auto& [surface, _] : inputMeasurements) {
         propagatorOptions.navigation.registerMeasurementSurface(*surface);
       }
+      // Sequential: register each surface once, also if it carries several
+      // measurements
+      std::vector<const Surface*> registered;
+      for (const auto& [surface, _] : sequentialMeasurements) {
+        if (std::ranges::find(registered, surface) == registered.end()) {
+          registered.push_back(surface);
+          propagatorOptions.navigation.registerMeasurementSurface(*surface);
+        }
+      }
     } else {
       assert(sSequence != nullptr &&
              "DirectNavigator requires a surface sequence for KalmanFitter");
@@ -794,6 +1070,10 @@ class KalmanFitter {
     // Catch the actor and set the measurements
     auto& kalmanActor = propagatorOptions.actorList.template get<KalmanActor>();
     kalmanActor.inputMeasurements = std::move(inputMeasurements);
+    kalmanActor.measurementAssignment = kfOptions.measurementAssignment;
+    kalmanActor.sequentialMeasurements = std::move(sequentialMeasurements);
+    kalmanActor.maxSkippedMeasurements = kfOptions.maxSkippedMeasurements;
+    kalmanActor.maxPredictedChi2 = kfOptions.maxPredictedChi2;
     kalmanActor.targetReached.surface = targetSurface;
     kalmanActor.multipleScattering = kfOptions.multipleScattering;
     kalmanActor.energyLoss = kfOptions.energyLoss;
